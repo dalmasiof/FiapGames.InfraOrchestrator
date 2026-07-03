@@ -31,6 +31,10 @@ services:
       Jwt__Key: "ChaveSuperSecretaFiapGamesEAD12MuitoLongaParaGarantirSeguranca123!"
       Jwt__Issuer: "FiapGamesApi"
       Jwt__Audience: "FiapGamesClients"
+      RabbitMq__HostName: "rabbitmq"
+      RabbitMq__Port: "5672"
+      RabbitMq__UserName: "guest"
+      RabbitMq__Password: "guest"
     depends_on:
       sqlserver-auth:
         condition: service_healthy
