@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notification-worker
+  template:
+    metadata:
+      labels:
+        app: notification-worker
+    spec:
+      initContainers:
+        - name: wait-for-sql
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - until nc -z sqlserver-notification 1433; do echo waiting for sqlserver-notification; sleep 5; done
+        - name: wait-for-rabbitmq
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - until nc -z rabbitmq 5672; do echo waiting for rabbitmq; sleep 5; done
+      containers:
+        - name: notification-worker
+          image: fiapgames/notification-worker:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: notification-worker-config
+                  key: ASPNETCORE_ENVIRONMENT
+            - name: ConnectionStrings__DefaultConnection
+              valueFrom:
+                secretKeyRef:
+                  name: notification-worker-secret
+                  key: ConnectionStrings__DefaultConnection
+            - name: RabbitMq__HostName
+              valueFrom:
+                configMapKeyRef:
+                  name: notification-worker-config
+                  key: RabbitMq__HostName
+            - name: RabbitMq__Port
+              valueFrom:
+                configMapKeyRef:
+                  name: notification-worker-config
+                  key: RabbitMq__Port
+            - name: RabbitMq__UserName
+              valueFrom:
+                secretKeyRef:
+                  name: notification-worker-secret
+                  key: RabbitMq__UserName
+            - name: RabbitMq__Password
+              valueFrom:
+                secretKeyRef:
+                  name: notification-worker-secret
+                  key: RabbitMq__Password
