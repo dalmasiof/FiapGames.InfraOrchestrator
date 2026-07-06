@@ -5,8 +5,8 @@ Repositório responsável por orquestrar os serviços locais do workspace FiapGa
 ## Objetivo
 
 - Subir a infraestrutura comum de mensageria e bancos
-- Construir e iniciar os serviços existentes em outros repositórios
-- Permitir bootstrap automático via script
+- Iniciar os serviços existentes com base em uma árvore local fixa
+- Permitir bootstrap automático via script a partir de `C:\git\FiapGames_MS`
 
 ## Como usar
 
@@ -31,14 +31,17 @@ cd /c/git/FiapGames_MS/FiapGames.InfraOrchestrator
   - PaymentService
   - Catalog
   - Notification
-- `bootstrap.ps1` para verificação de repositórios e deploy
+- `bootstrap.ps1` para validação do workspace e deploy
 - `bootstrap.sh` equivalente para ambientes Unix
 
 ## Observações
 
-- Os repositórios são esperados dentro de `c:\git\FiapGames_MS`.
-- Ajuste URLs de clone no `bootstrap.ps1` se quiser que ele faça clone automático.
-- O script `bootstrap.sh` não faz clone automático hoje; mantém apenas pull dos repositórios existentes.
+- Os repositórios devem existir previamente em `C:\git\FiapGames_MS`:
+  - `FiapGame.AuthService`
+  - `FiapGame.PaymentService`
+  - `FiapGames.Catalog`
+  - `FiapGames.Notification`
+- O bootstrap não faz clone nem pull; ele só valida a árvore local e sobe a stack.
 
 ## Variáveis de ambiente (Docker Compose)
 
@@ -102,6 +105,8 @@ Defina valores reais para:
 - `PAYMENT_CONNECTION_STRING`
 - `CATALOG_CONNECTION_STRING`
 - `NOTIFICATION_CONNECTION_STRING`
+
+Os scripts `apply-secrets.ps1` e `run-clean-validation.ps1` carregam `.env` automaticamente a partir da raiz deste repositório.
 
 ### 2) Docker limpo
 

@@ -28,6 +28,8 @@ spec:
                 secretKeyRef:
                   name: sqlserver-secret
                   key: MSSQL_SA_PASSWORD
+            - name: MSSQL_MEMORY_LIMIT_MB
+              value: "768"
           readinessProbe:
             exec:
               command:

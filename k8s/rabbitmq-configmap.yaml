@@ -5,4 +5,4 @@ metadata:
   labels:
     app: rabbitmq
 data:
-  RABBITMQ_DEFAULT_USER: guest
+  RABBITMQ_DEFAULT_USER: fiapgames

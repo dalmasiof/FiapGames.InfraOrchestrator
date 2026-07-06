@@ -1,5 +1,41 @@
 $ErrorActionPreference = 'Stop'
 
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$repoDir = Resolve-Path (Join-Path $scriptDir '..')
+
+function Import-DotEnv {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    if (-not (Test-Path $Path)) {
+        return
+    }
+
+    Get-Content $Path | ForEach-Object {
+        $line = $_.Trim()
+
+        if ([string]::IsNullOrWhiteSpace($line) -or $line.StartsWith('#')) {
+            return
+        }
+
+        if ($line -notmatch '^(?<name>[A-Za-z_][A-Za-z0-9_]*)=(?<value>.*)$') {
+            return
+        }
+
+        $name = $Matches['name']
+        $value = $Matches['value'].Trim()
+
+        if (($value.StartsWith('"') -and $value.EndsWith('"')) -or ($value.StartsWith("'") -and $value.EndsWith("'"))) {
+            $value = $value.Substring(1, $value.Length - 2)
+        }
+
+        [Environment]::SetEnvironmentVariable($name, $value)
+    }
+}
+
+Import-DotEnv -Path (Join-Path $repoDir '.env')
+
 if (-not (Get-Command kubectl -ErrorAction SilentlyContinue)) {
     throw 'kubectl not found in PATH.'
 }
