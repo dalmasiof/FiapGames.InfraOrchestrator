@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: catalog-api-config
+  labels:
+    app: catalog-api
+data:
+  ASPNETCORE_ENVIRONMENT: Development
+  ASPNETCORE_URLS: http://+:8082
+  Jwt__Issuer: FiapGamesApi
+  Jwt__Audience: FiapGamesClients
+  RabbitMq__HostName: rabbitmq
+  RabbitMq__Port: "5672"

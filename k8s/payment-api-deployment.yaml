@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payment-api
+  template:
+    metadata:
+      labels:
+        app: payment-api
+    spec:
+      initContainers:
+        - name: wait-for-sql
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - until nc -z sqlserver-payment 1433; do echo waiting for sqlserver-payment; sleep 5; done
+        - name: wait-for-rabbitmq
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - until nc -z rabbitmq 5672; do echo waiting for rabbitmq; sleep 5; done
+      containers:
+        - name: payment-api
+          image: fiapgames/payment-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8082
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: payment-api-config
+                  key: ASPNETCORE_ENVIRONMENT
+            - name: ASPNETCORE_URLS
+              valueFrom:
+                configMapKeyRef:
+                  name: payment-api-config
+                  key: ASPNETCORE_URLS
+            - name: Jwt__Issuer
+              valueFrom:
+                configMapKeyRef:
+                  name: payment-api-config
+                  key: Jwt__Issuer
+            - name: Jwt__Audience
+              valueFrom:
+                configMapKeyRef:
+                  name: payment-api-config
+                  key: Jwt__Audience
+            - name: ConnectionStrings__FIAPGamesConnection
+              valueFrom:
+                secretKeyRef:
+                  name: payment-api-secret
+                  key: ConnectionStrings__FIAPGamesConnection
+            - name: Jwt__Key
+              valueFrom:
+                secretKeyRef:
+                  name: payment-api-secret
+                  key: Jwt__Key
+            - name: RabbitMq__HostName
+              valueFrom:
+                configMapKeyRef:
+                  name: payment-api-config
+                  key: RabbitMq__HostName
+            - name: RabbitMq__Port
+              valueFrom:
+                configMapKeyRef:
+                  name: payment-api-config
+                  key: RabbitMq__Port
+            - name: RabbitMq__UserName
+              valueFrom:
+                secretKeyRef:
+                  name: payment-api-secret
+                  key: RabbitMq__UserName
+            - name: RabbitMq__Password
+              valueFrom:
+                secretKeyRef:
+                  name: payment-api-secret
+                  key: RabbitMq__Password
+          readinessProbe:
+            tcpSocket:
+              port: 8082
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8082
+            initialDelaySeconds: 30
+            periodSeconds: 20

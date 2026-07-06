@@ -7,8 +7,8 @@ services:
       - "5672:5672"
       - "15672:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-guest}
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
@@ -27,14 +27,14 @@ services:
       - "8081:8081"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__FIAPGamesConnection: "Server=sqlserver-auth,1433;Database=fiapgames_auth;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True"
-      Jwt__Key: "ChaveSuperSecretaFiapGamesEAD12MuitoLongaParaGarantirSeguranca123!"
-      Jwt__Issuer: "FiapGamesApi"
-      Jwt__Audience: "FiapGamesClients"
+      ConnectionStrings__FIAPGamesConnection: "${AUTH_CONNECTION_STRING:-Server=sqlserver-auth,1433;Database=fiapgames_auth;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True}"
+      Jwt__Key: "${JWT_KEY:-CHANGE_ME_WITH_LONG_SECURE_JWT_KEY}"
+      Jwt__Issuer: "${JWT_ISSUER:-FiapGamesApi}"
+      Jwt__Audience: "${JWT_AUDIENCE:-FiapGamesClients}"
       RabbitMq__HostName: "rabbitmq"
       RabbitMq__Port: "5672"
-      RabbitMq__UserName: "guest"
-      RabbitMq__Password: "guest"
+      RabbitMq__UserName: "${RABBITMQ_USERNAME:-guest}"
+      RabbitMq__Password: "${RABBITMQ_PASSWORD:-guest}"
     depends_on:
       sqlserver-auth:
         condition: service_healthy
@@ -47,7 +47,7 @@ services:
     restart: always
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "YourStrong@Passw0rd"
+      MSSQL_SA_PASSWORD: "${SQLSERVER_SA_PASSWORD:-YourStrong@Passw0rd}"
     ports:
       - "1433:1433"
     volumes:
@@ -56,7 +56,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'YourStrong@Passw0rd' -C -Q 'SELECT 1' || exit 1"
+          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '${SQLSERVER_SA_PASSWORD:-YourStrong@Passw0rd}' -C -Q 'SELECT 1' || exit 1"
         ]
       interval: 10s
       timeout: 5s
@@ -74,9 +74,18 @@ services:
       - "8083:8082"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__FIAPGamesConnection: "Server=sqlserver-payment,1433;Database=fiapgames_payment;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False;Connect Timeout=60;ConnectRetryCount=20;ConnectRetryInterval=5"
+      ConnectionStrings__FIAPGamesConnection: "${PAYMENT_CONNECTION_STRING:-Server=sqlserver-payment,1433;Database=fiapgames_payment;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False;Connect Timeout=60;ConnectRetryCount=20;ConnectRetryInterval=5}"
+      Jwt__Key: "${JWT_KEY:-CHANGE_ME_WITH_LONG_SECURE_JWT_KEY}"
+      Jwt__Issuer: "${JWT_ISSUER:-FiapGamesApi}"
+      Jwt__Audience: "${JWT_AUDIENCE:-FiapGamesClients}"
+      RabbitMq__HostName: "rabbitmq"
+      RabbitMq__Port: "5672"
+      RabbitMq__UserName: "${RABBITMQ_USERNAME:-guest}"
+      RabbitMq__Password: "${RABBITMQ_PASSWORD:-guest}"
     depends_on:
       sqlserver-payment:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     networks:
       - fiapgames-network
@@ -87,7 +96,7 @@ services:
     restart: always
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "YourStrong@Passw0rd"
+      MSSQL_SA_PASSWORD: "${SQLSERVER_SA_PASSWORD:-YourStrong@Passw0rd}"
     ports:
       - "1436:1433"
     volumes:
@@ -96,7 +105,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'YourStrong@Passw0rd' -C -Q 'SELECT 1' || exit 1"
+          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '${SQLSERVER_SA_PASSWORD:-YourStrong@Passw0rd}' -C -Q 'SELECT 1' || exit 1"
         ]
       interval: 10s
       timeout: 5s
@@ -114,12 +123,18 @@ services:
       - "8082:8082"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__FIAPGamesConnection: "Server=sqlserver-catalog,1433;Database=fiapgames_catalog;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False;Connect Timeout=60;ConnectRetryCount=20;ConnectRetryInterval=5"
-      Jwt__Key: "ChaveSuperSecretaFiapGamesEAD12MuitoLongaParaGarantirSeguranca123!"
-      Jwt__Issuer: "FiapGamesApi"
-      Jwt__Audience: "FiapGamesClients"
+      ConnectionStrings__FIAPGamesConnection: "${CATALOG_CONNECTION_STRING:-Server=sqlserver-catalog,1433;Database=fiapgames_catalog;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False;Connect Timeout=60;ConnectRetryCount=20;ConnectRetryInterval=5}"
+      Jwt__Key: "${JWT_KEY:-CHANGE_ME_WITH_LONG_SECURE_JWT_KEY}"
+      Jwt__Issuer: "${JWT_ISSUER:-FiapGamesApi}"
+      Jwt__Audience: "${JWT_AUDIENCE:-FiapGamesClients}"
+      RabbitMq__HostName: "rabbitmq"
+      RabbitMq__Port: "5672"
+      RabbitMq__UserName: "${RABBITMQ_USERNAME:-guest}"
+      RabbitMq__Password: "${RABBITMQ_PASSWORD:-guest}"
     depends_on:
       sqlserver-catalog:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     networks:
       - fiapgames-network
@@ -130,7 +145,7 @@ services:
     restart: always
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "YourStrong@Passw0rd"
+      MSSQL_SA_PASSWORD: "${SQLSERVER_SA_PASSWORD:-YourStrong@Passw0rd}"
     ports:
       - "1437:1433"
     volumes:
@@ -139,7 +154,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'YourStrong@Passw0rd' -C -Q 'SELECT 1' || exit 1"
+          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '${SQLSERVER_SA_PASSWORD:-YourStrong@Passw0rd}' -C -Q 'SELECT 1' || exit 1"
         ]
       interval: 10s
       timeout: 5s
@@ -155,11 +170,11 @@ services:
     container_name: fiapgames-notification-worker
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__DefaultConnection: "Server=sqlserver-notification,1433;Database=fiapgames_notifications;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False;Connect Timeout=60;ConnectRetryCount=20;ConnectRetryInterval=5"
+      ConnectionStrings__DefaultConnection: "${NOTIFICATION_CONNECTION_STRING:-Server=sqlserver-notification,1433;Database=fiapgames_notifications;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False;Connect Timeout=60;ConnectRetryCount=20;ConnectRetryInterval=5}"
       RabbitMq__HostName: "rabbitmq"
       RabbitMq__Port: "5672"
-      RabbitMq__UserName: "guest"
-      RabbitMq__Password: "guest"
+      RabbitMq__UserName: "${RABBITMQ_USERNAME:-guest}"
+      RabbitMq__Password: "${RABBITMQ_PASSWORD:-guest}"
     depends_on:
       sqlserver-notification:
         condition: service_healthy
@@ -174,7 +189,7 @@ services:
     restart: always
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "YourStrong@Passw0rd"
+      MSSQL_SA_PASSWORD: "${SQLSERVER_SA_PASSWORD:-YourStrong@Passw0rd}"
     ports:
       - "1435:1433"
     volumes:
@@ -183,7 +198,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'YourStrong@Passw0rd' -C -Q 'SELECT 1' || exit 1"
+          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '${SQLSERVER_SA_PASSWORD:-YourStrong@Passw0rd}' -C -Q 'SELECT 1' || exit 1"
         ]
       interval: 10s
       timeout: 5s

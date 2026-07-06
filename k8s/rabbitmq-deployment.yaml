@@ -20,9 +20,15 @@ spec:
             - containerPort: 15672
           env:
             - name: RABBITMQ_DEFAULT_USER
-              value: "guest"
+              valueFrom:
+                configMapKeyRef:
+                  name: rabbitmq-config
+                  key: RABBITMQ_DEFAULT_USER
             - name: RABBITMQ_DEFAULT_PASS
-              value: "guest"
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-secret
+                  key: RABBITMQ_DEFAULT_PASS
           readinessProbe:
             exec:
               command:
