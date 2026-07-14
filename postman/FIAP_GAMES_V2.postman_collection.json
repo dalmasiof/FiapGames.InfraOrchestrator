@@ -834,7 +834,35 @@
           "response": []
         },
         {
-          "name": "03 - Historico de Pagamentos por Usuario",
+          "name": "03 - Listar Contas",
+          "description": "GET {{Url_Payment}}/Conta",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{Url_Payment}}/Conta",
+              "host": [
+                "{{Url_Payment}}"
+              ],
+              "path": [
+                "Conta"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "04 - Historico de Pagamentos por Usuario",
           "description": "GET {{Url_Payment}}/Pagamento/usuario/{{usuario_id}}",
           "request": {
             "auth": {

@@ -69,8 +69,32 @@ function Run-Docker {
     docker compose logs --tail=200
 }
 
+function Build-K8sServiceImages {
+    Require-Command -Name 'docker'
+
+    $workspaceDir = Resolve-Path (Join-Path $repoDir '..')
+
+    $images = @(
+        @{ Name = 'fiapgames/auth-api:latest'; Context = (Join-Path $workspaceDir 'FiapGame.AuthService') },
+        @{ Name = 'fiapgames/payment-api:latest'; Context = (Join-Path $workspaceDir 'FiapGame.PaymentService\FiapGames.PaymentService') },
+        @{ Name = 'fiapgames/catalog-api:latest'; Context = (Join-Path $workspaceDir 'FiapGames.Catalog') },
+        @{ Name = 'fiapgames/notification-worker:latest'; Context = (Join-Path $workspaceDir 'FiapGames.Notification') }
+    )
+
+    foreach ($img in $images) {
+        if (-not (Test-Path $img.Context)) {
+            throw "Docker build context not found: $($img.Context)"
+        }
+
+        Write-Host "Building image $($img.Name) from $($img.Context)"
+        docker build -t $($img.Name) $($img.Context)
+    }
+}
+
 function Run-K8s {
     Require-Command -Name 'kubectl'
+    Write-Host 'Building local images for Kubernetes'
+    Build-K8sServiceImages
 
     $deploymentFiles = Get-ManifestFiles -Pattern '*deployment.yaml'
     $serviceFiles = Get-ManifestFiles -Pattern '*service.yaml'
@@ -93,6 +117,15 @@ function Run-K8s {
     Write-Host 'Applying deployments and services'
     Invoke-KubectlForFiles -Action 'apply' -Files $deploymentFiles
     Invoke-KubectlForFiles -Action 'apply' -Files $serviceFiles
+
+    Write-Host 'Restarting app deployments to force newest local images'
+    kubectl rollout restart deployment auth-api catalog-api payment-api notification-worker
+
+    Write-Host 'Waiting rollout status'
+    kubectl rollout status deployment/auth-api
+    kubectl rollout status deployment/catalog-api
+    kubectl rollout status deployment/payment-api
+    kubectl rollout status deployment/notification-worker
 
     Write-Host 'Kubernetes status'
     kubectl get pods,svc
