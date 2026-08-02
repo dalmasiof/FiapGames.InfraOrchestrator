@@ -27,8 +27,8 @@ services:
       - "8081:8081"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__FIAPGamesConnection: "${AUTH_CONNECTION_STRING:-Server=sqlserver-auth,1433;Database=fiapgames_auth;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True}"
-      Jwt__Key: "${JWT_KEY:-CHANGE_ME_WITH_LONG_SECURE_JWT_KEY}"
+      ConnectionStrings__FIAPGamesConnection: "${AUTH_CONNECTION_STRING:-Server=sqlserver,1433;Database=fiapgames_auth;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True}"
+      Jwt__PrivateKeyFile: "/run/secrets/jwt-private.pem"
       Jwt__Issuer: "${JWT_ISSUER:-FiapGamesApi}"
       Jwt__Audience: "${JWT_AUDIENCE:-FiapGamesClients}"
       RabbitMq__HostName: "rabbitmq"
@@ -36,14 +36,43 @@ services:
       RabbitMq__UserName: "${RABBITMQ_USERNAME:-guest}"
       RabbitMq__Password: "${RABBITMQ_PASSWORD:-guest}"
     depends_on:
-      sqlserver-auth:
+      auth-migrate:
+        condition: service_completed_successfully
+      rabbitmq:
         condition: service_healthy
+    secrets:
+      - source: jwt-private-key
+        target: jwt-private.pem
     networks:
       - fiapgames-network
 
-  sqlserver-auth:
+  auth-migrate:
+    build:
+      context: ../FiapGame.AuthService
+      dockerfile: Dockerfile
+    command: ["--migrate"]
+    restart: "no"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__FIAPGamesConnection: "${AUTH_CONNECTION_STRING:-Server=sqlserver,1433;Database=fiapgames_auth;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True}"
+      Jwt__PrivateKeyFile: "/run/secrets/jwt-private.pem"
+      Jwt__Issuer: "${JWT_ISSUER:-FiapGamesApi}"
+      Jwt__Audience: "${JWT_AUDIENCE:-FiapGamesClients}"
+      RabbitMq__HostName: "rabbitmq"
+      RabbitMq__UserName: "${RABBITMQ_USERNAME:-guest}"
+      RabbitMq__Password: "${RABBITMQ_PASSWORD:-guest}"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    secrets:
+      - source: jwt-private-key
+        target: jwt-private.pem
+    networks:
+      - fiapgames-network
+
+  sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: fiapgames-auth-db
+    container_name: fiapgames-sqlserver
     restart: always
     environment:
       ACCEPT_EULA: "Y"
@@ -51,7 +80,7 @@ services:
     ports:
       - "1433:1433"
     volumes:
-      - sqlserver-auth-data:/var/opt/mssql
+      - sqlserver-data:/var/opt/mssql
     healthcheck:
       test:
         [
@@ -74,8 +103,8 @@ services:
       - "8083:8082"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__FIAPGamesConnection: "${PAYMENT_CONNECTION_STRING:-Server=sqlserver-payment,1433;Database=fiapgames_payment;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False;Connect Timeout=60;ConnectRetryCount=20;ConnectRetryInterval=5}"
-      Jwt__Key: "${JWT_KEY:-CHANGE_ME_WITH_LONG_SECURE_JWT_KEY}"
+      ConnectionStrings__FIAPGamesConnection: "${PAYMENT_CONNECTION_STRING:-Server=sqlserver,1433;Database=fiapgames_payment;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False;Connect Timeout=60;ConnectRetryCount=20;ConnectRetryInterval=5}"
+      Jwt__JwksUri: "http://auth-api:8081/.well-known/jwks"
       Jwt__Issuer: "${JWT_ISSUER:-FiapGamesApi}"
       Jwt__Audience: "${JWT_AUDIENCE:-FiapGamesClients}"
       RabbitMq__HostName: "rabbitmq"
@@ -83,34 +112,33 @@ services:
       RabbitMq__UserName: "${RABBITMQ_USERNAME:-guest}"
       RabbitMq__Password: "${RABBITMQ_PASSWORD:-guest}"
     depends_on:
-      sqlserver-payment:
-        condition: service_healthy
+      payment-migrate:
+        condition: service_completed_successfully
+      auth-api:
+        condition: service_started
       rabbitmq:
         condition: service_healthy
     networks:
       - fiapgames-network
 
-  sqlserver-payment:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: fiapgames-payment-db
-    restart: always
+  payment-migrate:
+    build:
+      context: ../FiapGame.PaymentService/FiapGames.PaymentService
+      dockerfile: Dockerfile
+    command: ["--migrate"]
+    restart: "no"
     environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "${SQLSERVER_SA_PASSWORD:-YourStrong@Passw0rd}"
-    ports:
-      - "1436:1433"
-    volumes:
-      - sqlserver-payment-data:/var/opt/mssql
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '${SQLSERVER_SA_PASSWORD:-YourStrong@Passw0rd}' -C -Q 'SELECT 1' || exit 1"
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__FIAPGamesConnection: "${PAYMENT_CONNECTION_STRING:-Server=sqlserver,1433;Database=fiapgames_payment;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False}"
+      Jwt__JwksUri: "http://auth-api:8081/.well-known/jwks"
+      Jwt__Issuer: "${JWT_ISSUER:-FiapGamesApi}"
+      Jwt__Audience: "${JWT_AUDIENCE:-FiapGamesClients}"
+      RabbitMq__HostName: "rabbitmq"
+      RabbitMq__UserName: "${RABBITMQ_USERNAME:-guest}"
+      RabbitMq__Password: "${RABBITMQ_PASSWORD:-guest}"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
     networks:
       - fiapgames-network
 
@@ -123,8 +151,8 @@ services:
       - "8082:8082"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__FIAPGamesConnection: "${CATALOG_CONNECTION_STRING:-Server=sqlserver-catalog,1433;Database=fiapgames_catalog;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False;Connect Timeout=60;ConnectRetryCount=20;ConnectRetryInterval=5}"
-      Jwt__Key: "${JWT_KEY:-CHANGE_ME_WITH_LONG_SECURE_JWT_KEY}"
+      ConnectionStrings__FIAPGamesConnection: "${CATALOG_CONNECTION_STRING:-Server=sqlserver,1433;Database=fiapgames_catalog;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False;Connect Timeout=60;ConnectRetryCount=20;ConnectRetryInterval=5}"
+      Jwt__JwksUri: "http://auth-api:8081/.well-known/jwks"
       Jwt__Issuer: "${JWT_ISSUER:-FiapGamesApi}"
       Jwt__Audience: "${JWT_AUDIENCE:-FiapGamesClients}"
       RabbitMq__HostName: "rabbitmq"
@@ -132,34 +160,33 @@ services:
       RabbitMq__UserName: "${RABBITMQ_USERNAME:-guest}"
       RabbitMq__Password: "${RABBITMQ_PASSWORD:-guest}"
     depends_on:
-      sqlserver-catalog:
-        condition: service_healthy
+      catalog-migrate:
+        condition: service_completed_successfully
+      auth-api:
+        condition: service_started
       rabbitmq:
         condition: service_healthy
     networks:
       - fiapgames-network
 
-  sqlserver-catalog:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: fiapgames-catalog-db
-    restart: always
+  catalog-migrate:
+    build:
+      context: ../FiapGames.Catalog
+      dockerfile: Dockerfile
+    command: ["--migrate"]
+    restart: "no"
     environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "${SQLSERVER_SA_PASSWORD:-YourStrong@Passw0rd}"
-    ports:
-      - "1437:1433"
-    volumes:
-      - sqlserver-catalog-data:/var/opt/mssql
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '${SQLSERVER_SA_PASSWORD:-YourStrong@Passw0rd}' -C -Q 'SELECT 1' || exit 1"
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__FIAPGamesConnection: "${CATALOG_CONNECTION_STRING:-Server=sqlserver,1433;Database=fiapgames_catalog;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False}"
+      Jwt__JwksUri: "http://auth-api:8081/.well-known/jwks"
+      Jwt__Issuer: "${JWT_ISSUER:-FiapGamesApi}"
+      Jwt__Audience: "${JWT_AUDIENCE:-FiapGamesClients}"
+      RabbitMq__HostName: "rabbitmq"
+      RabbitMq__UserName: "${RABBITMQ_USERNAME:-guest}"
+      RabbitMq__Password: "${RABBITMQ_PASSWORD:-guest}"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
     networks:
       - fiapgames-network
 
@@ -168,51 +195,48 @@ services:
       context: ../FiapGames.Notification
       dockerfile: Dockerfile
     container_name: fiapgames-notification-worker
+    ports:
+      - "8084:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__DefaultConnection: "${NOTIFICATION_CONNECTION_STRING:-Server=sqlserver-notification,1433;Database=fiapgames_notifications;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False;Connect Timeout=60;ConnectRetryCount=20;ConnectRetryInterval=5}"
+      ConnectionStrings__DefaultConnection: "${NOTIFICATION_CONNECTION_STRING:-Server=sqlserver,1433;Database=fiapgames_notification;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False;Connect Timeout=60;ConnectRetryCount=20;ConnectRetryInterval=5}"
       RabbitMq__HostName: "rabbitmq"
       RabbitMq__Port: "5672"
       RabbitMq__UserName: "${RABBITMQ_USERNAME:-guest}"
       RabbitMq__Password: "${RABBITMQ_PASSWORD:-guest}"
     depends_on:
-      sqlserver-notification:
-        condition: service_healthy
+      notification-migrate:
+        condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
     networks:
       - fiapgames-network
 
-  sqlserver-notification:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: fiapgames-notification-db
-    restart: always
+  notification-migrate:
+    build:
+      context: ../FiapGames.Notification
+      dockerfile: Dockerfile
+    command: ["--migrate"]
+    restart: "no"
     environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "${SQLSERVER_SA_PASSWORD:-YourStrong@Passw0rd}"
-    ports:
-      - "1435:1433"
-    volumes:
-      - sqlserver-notification-data:/var/opt/mssql
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '${SQLSERVER_SA_PASSWORD:-YourStrong@Passw0rd}' -C -Q 'SELECT 1' || exit 1"
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: "${NOTIFICATION_CONNECTION_STRING:-Server=sqlserver,1433;Database=fiapgames_notification;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False}"
+      RabbitMq__HostName: "rabbitmq"
+      RabbitMq__UserName: "${RABBITMQ_USERNAME:-guest}"
+      RabbitMq__Password: "${RABBITMQ_PASSWORD:-guest}"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
     networks:
       - fiapgames-network
 
 volumes:
-  sqlserver-auth-data:
-  sqlserver-payment-data:
-  sqlserver-catalog-data:
-  sqlserver-notification-data:
+  sqlserver-data:
 
 networks:
   fiapgames-network:
     name: fiapgames-network
+
+secrets:
+  jwt-private-key:
+    file: ${JWT_PRIVATE_KEY_FILE:-./jwt-private.pem}

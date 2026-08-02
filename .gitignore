@@ -1,0 +1,14 @@
+# Local cryptographic key material
+*.pem
+jwt-private.pem.pub
+
+# Local environment secrets
+.env
+
+# Terraform local state and provider cache
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfplan

@@ -1,0 +1,31 @@
+<policies>
+  <inbound>
+    <base />
+    <validate-jwt header-name="Authorization"
+                  failed-validation-httpcode="401"
+                  failed-validation-error-message="Unauthorized"
+                  require-expiration-time="true"
+                  require-scheme="Bearer"
+                  require-signed-tokens="true">
+      <openid-config url="http://${auth_internal_fqdn}/.well-known/openid-configuration" />
+      <audiences>
+        <audience>FiapGamesClients</audience>
+      </audiences>
+      <issuers>
+        <issuer>FiapGamesApi</issuer>
+      </issuers>
+    </validate-jwt>
+    <rate-limit-by-key calls="10"
+                       renewal-period="60"
+                       counter-key="@(context.Request.IpAddress)" />
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>

@@ -1,0 +1,436 @@
+terraform {
+  required_version = ">= 1.6.0"
+
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 3.90"
+    }
+
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = "~> 2.47"
+    }
+
+    azapi = {
+      source  = "azure/azapi"
+      version = "~> 1.12"
+    }
+  }
+}
+
+provider "azurerm" {
+  features {}
+}
+
+provider "azuread" {}
+
+variable "location" {
+  description = "Azure region used by the FIAP Cloud Games production resources."
+  type        = string
+  default     = "brazilsouth"
+}
+
+variable "sql_admin_login" {
+  description = "Administrator login used only to provision the Azure SQL logical server."
+  type        = string
+  default     = "fiapgamesadmin"
+}
+
+variable "sql_admin_password" {
+  description = "Administrator password used only to provision the Azure SQL logical server."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = length(var.sql_admin_password) >= 16
+    error_message = "The SQL administrator password must contain at least 16 characters."
+  }
+}
+
+variable "rabbitmq_default_user" {
+  description = "RabbitMQ administrator username stored as a Container App secret."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = length(trimspace(var.rabbitmq_default_user)) >= 3
+    error_message = "The RabbitMQ administrator username must contain at least 3 characters."
+  }
+}
+
+variable "rabbitmq_default_password" {
+  description = "RabbitMQ administrator password stored as a Container App secret."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = length(var.rabbitmq_default_password) >= 16
+    error_message = "The RabbitMQ administrator password must contain at least 16 characters."
+  }
+}
+
+variable "apim_publisher_name" {
+  description = "Publisher name displayed by Azure API Management."
+  type        = string
+  default     = "FIAP Cloud Games"
+}
+
+variable "apim_publisher_email" {
+  description = "Publisher contact used by Azure API Management."
+  type        = string
+  default     = "cloud@fiapgames.com.br"
+}
+
+variable "configure_apim_apis" {
+  description = "Configures APIM APIs and ingress restrictions after the API Container Apps have been deployed."
+  type        = bool
+  default     = false
+}
+
+data "azurerm_client_config" "current" {}
+
+data "azurerm_container_app" "auth" {
+  count = var.configure_apim_apis ? 1 : 0
+
+  name                = "ca-auth-api"
+  resource_group_name = local.resource_group_name
+
+  depends_on = [azurerm_resource_group.main]
+}
+
+data "azurerm_container_app" "catalog" {
+  count = var.configure_apim_apis ? 1 : 0
+
+  name                = "ca-catalog-api"
+  resource_group_name = local.resource_group_name
+
+  depends_on = [azurerm_resource_group.main]
+}
+
+data "azurerm_container_app" "payment" {
+  count = var.configure_apim_apis ? 1 : 0
+
+  name                = "ca-payment-api"
+  resource_group_name = local.resource_group_name
+
+  depends_on = [azurerm_resource_group.main]
+}
+
+locals {
+  resource_group_name = "rg-fiapgames-prod"
+  unique_suffix       = substr(replace(data.azurerm_client_config.current.subscription_id, "-", ""), 0, 8)
+
+  database_names = toset([
+    "fiapgames_auth",
+    "fiapgames_catalog",
+    "fiapgames_payment",
+    "fiapgames_notification"
+  ])
+
+  common_tags = {
+    application = "fiap-cloud-games"
+    environment = "production"
+    managed_by  = "terraform"
+  }
+}
+
+resource "azurerm_resource_group" "main" {
+  name     = local.resource_group_name
+  location = var.location
+  tags     = local.common_tags
+}
+
+resource "azurerm_container_registry" "main" {
+  name                = "acrfiapgamesprod${local.unique_suffix}"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  sku                 = "Basic"
+  admin_enabled       = true
+  tags                = local.common_tags
+}
+
+resource "azurerm_key_vault" "main" {
+  name                       = "kv-fiapgames-${local.unique_suffix}"
+  location                   = azurerm_resource_group.main.location
+  resource_group_name        = azurerm_resource_group.main.name
+  tenant_id                  = data.azurerm_client_config.current.tenant_id
+  sku_name                   = "standard"
+  enable_rbac_authorization  = true
+  soft_delete_retention_days = 7
+  purge_protection_enabled   = true
+  tags                       = local.common_tags
+}
+
+resource "azurerm_role_assignment" "current_user_key_vault_secrets_officer" {
+  scope                = azurerm_key_vault.main.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
+
+resource "azurerm_mssql_server" "main" {
+  name                         = "sql-fiapgames-prod-${local.unique_suffix}"
+  resource_group_name          = azurerm_resource_group.main.name
+  location                     = azurerm_resource_group.main.location
+  version                      = "12.0"
+  administrator_login          = var.sql_admin_login
+  administrator_login_password = var.sql_admin_password
+  minimum_tls_version          = "1.2"
+  tags                         = local.common_tags
+}
+
+resource "azurerm_mssql_firewall_rule" "allow_azure_services" {
+  name             = "AllowAzureServices"
+  server_id        = azurerm_mssql_server.main.id
+  start_ip_address = "0.0.0.0"
+  end_ip_address   = "0.0.0.0"
+}
+
+resource "azurerm_mssql_database" "services" {
+  for_each = local.database_names
+
+  name           = each.value
+  server_id      = azurerm_mssql_server.main.id
+  sku_name       = "Basic"
+  max_size_gb    = 2
+  zone_redundant = false
+  tags           = local.common_tags
+}
+
+resource "azurerm_log_analytics_workspace" "main" {
+  name                = "log-fiapgames-prod-${local.unique_suffix}"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  sku                 = "PerGB2018"
+  retention_in_days   = 30
+  tags                = local.common_tags
+}
+
+resource "azurerm_container_app_environment" "main" {
+  name                       = "cae-fiapgames-prod"
+  location                   = azurerm_resource_group.main.location
+  resource_group_name        = azurerm_resource_group.main.name
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
+  tags                       = local.common_tags
+
+}
+
+resource "azurerm_api_management" "main" {
+  name                = "apim-fiapgames-prod"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  publisher_name      = var.apim_publisher_name
+  publisher_email     = var.apim_publisher_email
+  sku_name            = "Developer_1"
+  tags                = local.common_tags
+
+  identity {
+    type = "SystemAssigned"
+  }
+}
+
+resource "azurerm_api_management_api" "auth" {
+  count = var.configure_apim_apis ? 1 : 0
+
+  name                = "fiapgames-auth"
+  resource_group_name = azurerm_resource_group.main.name
+  api_management_name = azurerm_api_management.main.name
+  revision            = "1"
+  display_name        = "FIAP Games Auth API"
+  path                = "auth"
+  protocols           = ["https"]
+  service_url         = "https://${data.azurerm_container_app.auth[0].latest_revision_fqdn}"
+
+  import {
+    content_format = "openapi-link"
+    content_value  = "https://${data.azurerm_container_app.auth[0].latest_revision_fqdn}/swagger/v1/swagger.json"
+  }
+}
+
+resource "azurerm_api_management_api" "catalog" {
+  count = var.configure_apim_apis ? 1 : 0
+
+  name                = "fiapgames-catalog"
+  resource_group_name = azurerm_resource_group.main.name
+  api_management_name = azurerm_api_management.main.name
+  revision            = "1"
+  display_name        = "FIAP Games Catalog API"
+  path                = "catalog"
+  protocols           = ["https"]
+  service_url         = "https://${data.azurerm_container_app.catalog[0].latest_revision_fqdn}"
+
+  import {
+    content_format = "openapi-link"
+    content_value  = "https://${data.azurerm_container_app.catalog[0].latest_revision_fqdn}/swagger/v1/swagger.json"
+  }
+}
+
+resource "azurerm_api_management_api" "payment" {
+  count = var.configure_apim_apis ? 1 : 0
+
+  name                = "fiapgames-payment"
+  resource_group_name = azurerm_resource_group.main.name
+  api_management_name = azurerm_api_management.main.name
+  revision            = "1"
+  display_name        = "FIAP Games Payment API"
+  path                = "payment"
+  protocols           = ["https"]
+  service_url         = "https://${data.azurerm_container_app.payment[0].latest_revision_fqdn}"
+
+  import {
+    content_format = "openapi-link"
+    content_value  = "https://${data.azurerm_container_app.payment[0].latest_revision_fqdn}/swagger/v1/swagger.json"
+  }
+}
+
+resource "azurerm_api_management_policy" "global" {
+  api_management_id = azurerm_api_management.main.id
+  xml_content       = file("${path.module}/policies/global-cors.xml")
+}
+
+resource "azurerm_api_management_api_policy" "payment" {
+  count = var.configure_apim_apis ? 1 : 0
+
+  api_name            = azurerm_api_management_api.payment[0].name
+  api_management_name = azurerm_api_management.main.name
+  resource_group_name = azurerm_resource_group.main.name
+
+  xml_content = templatefile("${path.module}/policies/payment-jwt.xml", {
+    auth_internal_fqdn = data.azurerm_container_app.auth[0].latest_revision_fqdn
+  })
+}
+
+resource "azapi_update_resource" "api_ingress_apim_only" {
+  for_each = var.configure_apim_apis ? {
+    auth    = data.azurerm_container_app.auth[0].id
+    catalog = data.azurerm_container_app.catalog[0].id
+    payment = data.azurerm_container_app.payment[0].id
+  } : {}
+
+  type        = "Microsoft.App/containerApps@2025-07-01"
+  resource_id = each.value
+
+  body = jsonencode({
+    properties = {
+      configuration = {
+        ingress = {
+          ipSecurityRestrictions = [
+            {
+              name           = "Allow-APIM"
+              action         = "Allow"
+              ipAddressRange = "${azurerm_api_management.main.public_ip_addresses[0]}/32"
+              description    = "Allow inbound requests only from FIAP Games API Management."
+            }
+          ]
+        }
+      }
+    }
+  })
+
+  depends_on = [
+    azurerm_api_management_api.auth,
+    azurerm_api_management_api.catalog,
+    azurerm_api_management_api.payment
+  ]
+}
+
+resource "azurerm_container_app" "rabbitmq" {
+  name                         = "ca-rabbitmq-prod"
+  container_app_environment_id = azurerm_container_app_environment.main.id
+  resource_group_name          = azurerm_resource_group.main.name
+  revision_mode                = "Single"
+  tags                         = local.common_tags
+
+  secret {
+    name  = "rabbitmq-default-user"
+    value = var.rabbitmq_default_user
+  }
+
+  secret {
+    name  = "rabbitmq-default-password"
+    value = var.rabbitmq_default_password
+  }
+
+  template {
+    min_replicas = 1
+    max_replicas = 1
+
+    container {
+      name   = "rabbitmq"
+      image  = "rabbitmq:3-management"
+      cpu    = 0.5
+      memory = "1Gi"
+
+      env {
+        name        = "RABBITMQ_DEFAULT_USER"
+        secret_name = "rabbitmq-default-user"
+      }
+
+      env {
+        name        = "RABBITMQ_DEFAULT_PASS"
+        secret_name = "rabbitmq-default-password"
+      }
+
+      startup_probe {
+        transport               = "TCP"
+        port                    = 5672
+        interval_seconds        = 5
+        timeout                 = 3
+        failure_count_threshold = 10
+      }
+
+      liveness_probe {
+        transport               = "TCP"
+        port                    = 5672
+        interval_seconds        = 10
+        timeout                 = 3
+        failure_count_threshold = 3
+      }
+    }
+  }
+
+  ingress {
+    external_enabled = false
+    target_port      = 5672
+    exposed_port     = 5672
+    transport        = "tcp"
+
+    traffic_weight {
+      percentage      = 100
+      latest_revision = true
+    }
+  }
+}
+
+# AzureRM 3.x models only the primary ingress port. Use the Azure API to add
+# RabbitMQ's management port to the same internal-only Container App ingress.
+resource "azapi_update_resource" "rabbitmq_management_port" {
+  type        = "Microsoft.App/containerApps@2025-07-01"
+  resource_id = azurerm_container_app.rabbitmq.id
+
+  body = jsonencode({
+    properties = {
+      configuration = {
+        secrets = [
+          {
+            name  = "rabbitmq-default-user"
+            value = var.rabbitmq_default_user
+          },
+          {
+            name  = "rabbitmq-default-password"
+            value = var.rabbitmq_default_password
+          }
+        ]
+        ingress = {
+          additionalPortMappings = [
+            {
+              external    = false
+              targetPort  = 15672
+              exposedPort = 15672
+            }
+          ]
+        }
+      }
+    }
+  })
+}
