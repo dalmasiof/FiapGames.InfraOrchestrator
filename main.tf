@@ -168,6 +168,19 @@ resource "azurerm_role_assignment" "current_user_key_vault_secrets_officer" {
   principal_id         = data.azurerm_client_config.current.object_id
 }
 
+resource "azurerm_user_assigned_identity" "workloads" {
+  name                = "id-fiapgames-workloads-prod"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  tags                = local.common_tags
+}
+
+resource "azurerm_role_assignment" "workloads_key_vault_secrets_user" {
+  scope                = azurerm_key_vault.main.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_user_assigned_identity.workloads.principal_id
+}
+
 resource "azurerm_mssql_server" "main" {
   name                         = "sql-fiapgames-prod-${local.unique_suffix}"
   resource_group_name          = azurerm_resource_group.main.name
@@ -433,4 +446,14 @@ resource "azapi_update_resource" "rabbitmq_management_port" {
       }
     }
   })
+}
+
+output "workload_managed_identity_resource_id" {
+  description = "Value for the AZURE_MANAGED_IDENTITY_RESOURCE_ID GitHub variable."
+  value       = azurerm_user_assigned_identity.workloads.id
+}
+
+output "workload_managed_identity_client_id" {
+  description = "Value for the AZURE_MANAGED_IDENTITY_CLIENT_ID GitHub variable."
+  value       = azurerm_user_assigned_identity.workloads.client_id
 }
