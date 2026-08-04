@@ -181,6 +181,25 @@ resource "azurerm_role_assignment" "workloads_key_vault_secrets_user" {
   principal_id         = azurerm_user_assigned_identity.workloads.principal_id
 }
 
+locals {
+  database_connection_strings = {
+    "ConnectionStrings--AuthConnection"         = "Server=tcp:${azurerm_mssql_server.main.fully_qualified_domain_name},1433;Initial Catalog=fiapgames_auth;User ID=${var.sql_admin_login};Password=${var.sql_admin_password};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+    "ConnectionStrings--CatalogConnection"      = "Server=tcp:${azurerm_mssql_server.main.fully_qualified_domain_name},1433;Initial Catalog=fiapgames_catalog;User ID=${var.sql_admin_login};Password=${var.sql_admin_password};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+    "ConnectionStrings--NotificationConnection" = "Server=tcp:${azurerm_mssql_server.main.fully_qualified_domain_name},1433;Initial Catalog=fiapgames_notification;User ID=${var.sql_admin_login};Password=${var.sql_admin_password};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+    "ConnectionStrings--PaymentConnection"      = "Server=tcp:${azurerm_mssql_server.main.fully_qualified_domain_name},1433;Initial Catalog=fiapgames_payment;User ID=${var.sql_admin_login};Password=${var.sql_admin_password};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+  }
+}
+
+resource "azurerm_key_vault_secret" "database_connection_strings" {
+  for_each = local.database_connection_strings
+
+  name         = each.key
+  value        = each.value
+  key_vault_id = azurerm_key_vault.main.id
+
+  depends_on = [azurerm_role_assignment.current_user_key_vault_secrets_officer]
+}
+
 resource "azurerm_mssql_server" "main" {
   name                         = "sql-fiapgames-prod-${local.unique_suffix}"
   resource_group_name          = azurerm_resource_group.main.name
