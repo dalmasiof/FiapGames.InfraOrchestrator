@@ -417,7 +417,7 @@ resource "terraform_data" "api_ingress_apim_only" {
 
   provisioner "local-exec" {
     command = <<-EOT
-      az containerapp ingress access-restriction set --name "${each.value.name}" --resource-group "${azurerm_resource_group.main.name}" --rule-name "Allow-APIM" --ip-address "${azurerm_api_management.main.public_ip_addresses[0]}/32" --action Allow --description "Allow only FIAP Games API Management" --output none
+      az containerapp ingress access-restriction set --name "${each.value.name}" --resource-group "${azurerm_resource_group.main.name}" --rule-name "Allow-APIM" --ip-address "${azurerm_api_management.main.public_ip_addresses[0]}/32" --action Allow --description "APIM-only" --output none
     EOT
   }
 
