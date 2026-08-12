@@ -228,7 +228,7 @@ resource "azurerm_key_vault_secret" "jwt_jwks_uri" {
   count = var.configure_apim_apis ? 1 : 0
 
   name         = "Jwt--JwksUri"
-  value        = "https://${data.azurerm_container_app.auth[0].ingress[0].fqdn}/.well-known/jwks"
+  value        = "${azurerm_api_management.main.gateway_url}/users/.well-known/jwks"
   key_vault_id = azurerm_key_vault.main.id
 
   depends_on = [azurerm_role_assignment.current_user_key_vault_secrets_officer]
