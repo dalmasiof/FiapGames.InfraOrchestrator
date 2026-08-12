@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars and keep the resulting file out of Git.
+location = "brazilsouth"
+
+sql_admin_login    = "fiapgamesadmin"
+sql_admin_password = "REPLACE_WITH_A_STRONG_PASSWORD"
+
+rabbitmq_default_user     = "fiapgames"
+rabbitmq_default_password = "REPLACE_WITH_A_STRONG_PASSWORD"
+
+apim_publisher_name  = "FIAP Cloud Games"
+apim_publisher_email = "cloud@fiapgames.com.br"
+
+configure_apim_apis          = true
+log_analytics_daily_quota_gb = 0.1

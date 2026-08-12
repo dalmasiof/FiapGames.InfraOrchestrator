@@ -1,0 +1,38 @@
+<policies>
+  <inbound>
+    <base />
+    <choose>
+      <when condition="@(context.Request.Method == &quot;OPTIONS&quot; || context.Request.Url.Path.EndsWith(&quot;/api/Auth/login&quot;, StringComparison.OrdinalIgnoreCase) || (context.Request.Method == &quot;POST&quot; &amp;&amp; context.Request.Url.Path.EndsWith(&quot;/api/Login&quot;, StringComparison.OrdinalIgnoreCase)) || context.Request.Url.Path.EndsWith(&quot;/.well-known/openid-configuration&quot;, StringComparison.OrdinalIgnoreCase) || context.Request.Url.Path.EndsWith(&quot;/.well-known/jwks&quot;, StringComparison.OrdinalIgnoreCase))">
+        <!-- Login, registration, discovery and CORS preflight are public. -->
+      </when>
+      <otherwise>
+        <validate-jwt header-name="Authorization"
+                      failed-validation-httpcode="401"
+                      failed-validation-error-message="Unauthorized"
+                      require-expiration-time="true"
+                      require-scheme="Bearer"
+                      require-signed-tokens="true">
+          <openid-config url="https://${auth_internal_fqdn}/.well-known/openid-configuration" />
+          <audiences>
+            <audience>FiapGamesClients</audience>
+          </audiences>
+          <issuers>
+            <issuer>FiapGamesApi</issuer>
+          </issuers>
+        </validate-jwt>
+      </otherwise>
+    </choose>
+    <rate-limit-by-key calls="30"
+                       renewal-period="60"
+                       counter-key="@(context.Request.IpAddress)" />
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>

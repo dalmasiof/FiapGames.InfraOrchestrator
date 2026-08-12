@@ -12,3 +12,6 @@ jwt-private.pem.pub
 crash.log
 crash.*.log
 *.tfplan
+terraform.tfvars
+*.auto.tfvars
+!*.tfvars.example

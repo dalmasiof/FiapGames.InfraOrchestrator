@@ -88,6 +88,17 @@ variable "configure_apim_apis" {
   default     = false
 }
 
+variable "log_analytics_daily_quota_gb" {
+  description = "Daily Log Analytics ingestion cap for the economical environment."
+  type        = number
+  default     = 0.1
+
+  validation {
+    condition     = var.log_analytics_daily_quota_gb >= 0.1
+    error_message = "The Log Analytics daily quota must be at least 0.1 GB."
+  }
+}
+
 data "azurerm_client_config" "current" {}
 
 data "azurerm_container_app" "auth" {
@@ -182,19 +193,38 @@ resource "azurerm_role_assignment" "workloads_key_vault_secrets_user" {
 }
 
 locals {
-  database_connection_strings = {
+  application_secrets = {
     "ConnectionStrings--AuthConnection"         = "Server=tcp:${azurerm_mssql_server.main.fully_qualified_domain_name},1433;Initial Catalog=fiapgames_auth;User ID=${var.sql_admin_login};Password=${var.sql_admin_password};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
     "ConnectionStrings--CatalogConnection"      = "Server=tcp:${azurerm_mssql_server.main.fully_qualified_domain_name},1433;Initial Catalog=fiapgames_catalog;User ID=${var.sql_admin_login};Password=${var.sql_admin_password};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
     "ConnectionStrings--NotificationConnection" = "Server=tcp:${azurerm_mssql_server.main.fully_qualified_domain_name},1433;Initial Catalog=fiapgames_notification;User ID=${var.sql_admin_login};Password=${var.sql_admin_password};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
     "ConnectionStrings--PaymentConnection"      = "Server=tcp:${azurerm_mssql_server.main.fully_qualified_domain_name},1433;Initial Catalog=fiapgames_payment;User ID=${var.sql_admin_login};Password=${var.sql_admin_password};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+    "RabbitMq--HostName"                        = azurerm_container_app.rabbitmq.ingress[0].fqdn
+    "RabbitMq--Port"                            = "5672"
+    "RabbitMq--UserName"                        = var.rabbitmq_default_user
+    "RabbitMq--Password"                        = var.rabbitmq_default_password
   }
 }
 
-resource "azurerm_key_vault_secret" "database_connection_strings" {
-  for_each = local.database_connection_strings
+moved {
+  from = azurerm_key_vault_secret.database_connection_strings
+  to   = azurerm_key_vault_secret.application
+}
+
+resource "azurerm_key_vault_secret" "application" {
+  for_each = local.application_secrets
 
   name         = each.key
   value        = each.value
+  key_vault_id = azurerm_key_vault.main.id
+
+  depends_on = [azurerm_role_assignment.current_user_key_vault_secrets_officer]
+}
+
+resource "azurerm_key_vault_secret" "jwt_jwks_uri" {
+  count = var.configure_apim_apis ? 1 : 0
+
+  name         = "Jwt--JwksUri"
+  value        = "https://${data.azurerm_container_app.auth[0].latest_revision_fqdn}/.well-known/jwks"
   key_vault_id = azurerm_key_vault.main.id
 
   depends_on = [azurerm_role_assignment.current_user_key_vault_secrets_officer]
@@ -235,6 +265,7 @@ resource "azurerm_log_analytics_workspace" "main" {
   resource_group_name = azurerm_resource_group.main.name
   sku                 = "PerGB2018"
   retention_in_days   = 30
+  daily_quota_gb      = var.log_analytics_daily_quota_gb
   tags                = local.common_tags
 }
 
@@ -264,14 +295,15 @@ resource "azurerm_api_management" "main" {
 resource "azurerm_api_management_api" "auth" {
   count = var.configure_apim_apis ? 1 : 0
 
-  name                = "fiapgames-auth"
-  resource_group_name = azurerm_resource_group.main.name
-  api_management_name = azurerm_api_management.main.name
-  revision            = "1"
-  display_name        = "FIAP Games Auth API"
-  path                = "auth"
-  protocols           = ["https"]
-  service_url         = "https://${data.azurerm_container_app.auth[0].latest_revision_fqdn}"
+  name                  = "fiapgames-auth"
+  resource_group_name   = azurerm_resource_group.main.name
+  api_management_name   = azurerm_api_management.main.name
+  revision              = "1"
+  display_name          = "FIAP Games Users API"
+  path                  = "users"
+  protocols             = ["https"]
+  subscription_required = false
+  service_url           = "https://${data.azurerm_container_app.auth[0].latest_revision_fqdn}"
 
   import {
     content_format = "openapi-link"
@@ -282,14 +314,15 @@ resource "azurerm_api_management_api" "auth" {
 resource "azurerm_api_management_api" "catalog" {
   count = var.configure_apim_apis ? 1 : 0
 
-  name                = "fiapgames-catalog"
-  resource_group_name = azurerm_resource_group.main.name
-  api_management_name = azurerm_api_management.main.name
-  revision            = "1"
-  display_name        = "FIAP Games Catalog API"
-  path                = "catalog"
-  protocols           = ["https"]
-  service_url         = "https://${data.azurerm_container_app.catalog[0].latest_revision_fqdn}"
+  name                  = "fiapgames-catalog"
+  resource_group_name   = azurerm_resource_group.main.name
+  api_management_name   = azurerm_api_management.main.name
+  revision              = "1"
+  display_name          = "FIAP Games Catalog API"
+  path                  = "catalog"
+  protocols             = ["https"]
+  subscription_required = false
+  service_url           = "https://${data.azurerm_container_app.catalog[0].latest_revision_fqdn}"
 
   import {
     content_format = "openapi-link"
@@ -300,14 +333,15 @@ resource "azurerm_api_management_api" "catalog" {
 resource "azurerm_api_management_api" "payment" {
   count = var.configure_apim_apis ? 1 : 0
 
-  name                = "fiapgames-payment"
-  resource_group_name = azurerm_resource_group.main.name
-  api_management_name = azurerm_api_management.main.name
-  revision            = "1"
-  display_name        = "FIAP Games Payment API"
-  path                = "payment"
-  protocols           = ["https"]
-  service_url         = "https://${data.azurerm_container_app.payment[0].latest_revision_fqdn}"
+  name                  = "fiapgames-payment"
+  resource_group_name   = azurerm_resource_group.main.name
+  api_management_name   = azurerm_api_management.main.name
+  revision              = "1"
+  display_name          = "FIAP Games Payment API"
+  path                  = "payment"
+  protocols             = ["https"]
+  subscription_required = false
+  service_url           = "https://${data.azurerm_container_app.payment[0].latest_revision_fqdn}"
 
   import {
     content_format = "openapi-link"
@@ -318,6 +352,30 @@ resource "azurerm_api_management_api" "payment" {
 resource "azurerm_api_management_policy" "global" {
   api_management_id = azurerm_api_management.main.id
   xml_content       = file("${path.module}/policies/global-cors.xml")
+}
+
+resource "azurerm_api_management_api_policy" "users" {
+  count = var.configure_apim_apis ? 1 : 0
+
+  api_name            = azurerm_api_management_api.auth[0].name
+  api_management_name = azurerm_api_management.main.name
+  resource_group_name = azurerm_resource_group.main.name
+
+  xml_content = templatefile("${path.module}/policies/users-jwt.xml", {
+    auth_internal_fqdn = data.azurerm_container_app.auth[0].latest_revision_fqdn
+  })
+}
+
+resource "azurerm_api_management_api_policy" "catalog" {
+  count = var.configure_apim_apis ? 1 : 0
+
+  api_name            = azurerm_api_management_api.catalog[0].name
+  api_management_name = azurerm_api_management.main.name
+  resource_group_name = azurerm_resource_group.main.name
+
+  xml_content = templatefile("${path.module}/policies/catalog-jwt.xml", {
+    auth_internal_fqdn = data.azurerm_container_app.auth[0].latest_revision_fqdn
+  })
 }
 
 resource "azurerm_api_management_api_policy" "payment" {
@@ -362,7 +420,10 @@ resource "azapi_update_resource" "api_ingress_apim_only" {
   depends_on = [
     azurerm_api_management_api.auth,
     azurerm_api_management_api.catalog,
-    azurerm_api_management_api.payment
+    azurerm_api_management_api.payment,
+    azurerm_api_management_api_policy.users,
+    azurerm_api_management_api_policy.catalog,
+    azurerm_api_management_api_policy.payment
   ]
 }
 
@@ -475,4 +536,9 @@ output "workload_managed_identity_resource_id" {
 output "workload_managed_identity_client_id" {
   description = "Value for the AZURE_MANAGED_IDENTITY_CLIENT_ID GitHub variable."
   value       = azurerm_user_assigned_identity.workloads.client_id
+}
+
+output "api_gateway_url" {
+  description = "Public base URL for the only supported external entry point."
+  value       = azurerm_api_management.main.gateway_url
 }
