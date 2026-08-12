@@ -239,6 +239,10 @@ resource "azurerm_mssql_server" "main" {
   administrator_login_password = var.sql_admin_password
   minimum_tls_version          = "1.2"
   tags                         = local.common_tags
+
+  lifecycle {
+    ignore_changes = [administrator_login_password]
+  }
 }
 
 resource "azurerm_mssql_firewall_rule" "allow_azure_services" {
@@ -390,32 +394,32 @@ resource "azurerm_api_management_api_policy" "payment" {
   })
 }
 
-resource "azapi_update_resource" "api_ingress_apim_only" {
+resource "terraform_data" "api_ingress_apim_only" {
   for_each = var.configure_apim_apis ? {
-    auth    = data.azurerm_container_app.auth[0].id
-    catalog = data.azurerm_container_app.catalog[0].id
-    payment = data.azurerm_container_app.payment[0].id
+    auth = {
+      id   = data.azurerm_container_app.auth[0].id
+      name = data.azurerm_container_app.auth[0].name
+    }
+    catalog = {
+      id   = data.azurerm_container_app.catalog[0].id
+      name = data.azurerm_container_app.catalog[0].name
+    }
+    payment = {
+      id   = data.azurerm_container_app.payment[0].id
+      name = data.azurerm_container_app.payment[0].name
+    }
   } : {}
 
-  type        = "Microsoft.App/containerApps@2025-07-01"
-  resource_id = each.value
+  triggers_replace = [
+    each.value.id,
+    azurerm_api_management.main.public_ip_addresses[0]
+  ]
 
-  body = jsonencode({
-    properties = {
-      configuration = {
-        ingress = {
-          ipSecurityRestrictions = [
-            {
-              name           = "Allow-APIM"
-              action         = "Allow"
-              ipAddressRange = "${azurerm_api_management.main.public_ip_addresses[0]}/32"
-              description    = "Allow inbound requests only from FIAP Games API Management."
-            }
-          ]
-        }
-      }
-    }
-  })
+  provisioner "local-exec" {
+    command = <<-EOT
+      az containerapp ingress access-restriction set --name "${each.value.name}" --resource-group "${azurerm_resource_group.main.name}" --rule-name "Allow-APIM" --ip-address "${azurerm_api_management.main.public_ip_addresses[0]}/32" --action Allow --description "Allow only FIAP Games API Management" --output none
+    EOT
+  }
 
   depends_on = [
     azurerm_api_management_api.auth,
