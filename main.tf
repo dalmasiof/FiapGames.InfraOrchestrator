@@ -218,6 +218,10 @@ resource "azurerm_key_vault_secret" "application" {
   key_vault_id = azurerm_key_vault.main.id
 
   depends_on = [azurerm_role_assignment.current_user_key_vault_secrets_officer]
+
+  lifecycle {
+    ignore_changes = [value]
+  }
 }
 
 resource "azurerm_key_vault_secret" "jwt_jwks_uri" {
@@ -228,6 +232,10 @@ resource "azurerm_key_vault_secret" "jwt_jwks_uri" {
   key_vault_id = azurerm_key_vault.main.id
 
   depends_on = [azurerm_role_assignment.current_user_key_vault_secrets_officer]
+
+  lifecycle {
+    ignore_changes = [value]
+  }
 }
 
 resource "azurerm_mssql_server" "main" {
