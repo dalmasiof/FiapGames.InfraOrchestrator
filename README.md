@@ -1,5 +1,36 @@
 # FiapGames.InfraOrchestrator
 
+## Arquitetura Azure atual
+
+Este repositorio provisiona a base de producao do FCG com Terraform:
+
+- Azure API Management `apim-fiapgames-prod` como unica entrada externa;
+- rotas `/users`, `/catalog` e `/payment`;
+- validacao JWT RS256 por OpenID/JWKS e rate limit no gateway;
+- Container Apps restritos ao IP publico do APIM;
+- Azure Container Registry Basic;
+- Azure Key Vault com RBAC e identidade gerenciada;
+- quatro bancos Azure SQL Basic, um por servico;
+- RabbitMQ interno com uma replica;
+- Log Analytics com quota diaria de `0.1 GB`;
+- Container Apps Environment compartilhado.
+
+Gateway publico:
+
+```text
+https://apim-fiapgames-prod.azure-api.net
+```
+
+Antes de executar Terraform, copie `terraform.tfvars.example` para `terraform.tfvars` e preencha os valores sensiveis. O arquivo real e ignorado pelo Git. Use `configure_apim_apis = true` somente depois que Auth, Catalog e Payment existirem e responderem ao Swagger.
+
+```powershell
+C:\terraform\terraform.exe init
+C:\terraform\terraform.exe plan -var-file=terraform.tfvars -out=production.tfplan
+C:\terraform\terraform.exe apply production.tfplan
+```
+
+Testes esperados: JWKS via `/users/.well-known/jwks` retorna `200`, Catalog sem token retorna `401` e qualquer acesso direto aos FQDNs das APIs retorna `403`.
+
 Repositório responsável por orquestrar os serviços locais do workspace FiapGames.
 
 ## Objetivo
