@@ -224,7 +224,7 @@ resource "azurerm_key_vault_secret" "jwt_jwks_uri" {
   count = var.configure_apim_apis ? 1 : 0
 
   name         = "Jwt--JwksUri"
-  value        = "https://${data.azurerm_container_app.auth[0].latest_revision_fqdn}/.well-known/jwks"
+  value        = "https://${data.azurerm_container_app.auth[0].ingress[0].fqdn}/.well-known/jwks"
   key_vault_id = azurerm_key_vault.main.id
 
   depends_on = [azurerm_role_assignment.current_user_key_vault_secrets_officer]
@@ -303,11 +303,11 @@ resource "azurerm_api_management_api" "auth" {
   path                  = "users"
   protocols             = ["https"]
   subscription_required = false
-  service_url           = "https://${data.azurerm_container_app.auth[0].latest_revision_fqdn}"
+  service_url           = "https://${data.azurerm_container_app.auth[0].ingress[0].fqdn}"
 
   import {
     content_format = "openapi-link"
-    content_value  = "https://${data.azurerm_container_app.auth[0].latest_revision_fqdn}/swagger/v1/swagger.json"
+    content_value  = "https://${data.azurerm_container_app.auth[0].ingress[0].fqdn}/swagger/v1/swagger.json"
   }
 }
 
@@ -322,11 +322,11 @@ resource "azurerm_api_management_api" "catalog" {
   path                  = "catalog"
   protocols             = ["https"]
   subscription_required = false
-  service_url           = "https://${data.azurerm_container_app.catalog[0].latest_revision_fqdn}"
+  service_url           = "https://${data.azurerm_container_app.catalog[0].ingress[0].fqdn}"
 
   import {
     content_format = "openapi-link"
-    content_value  = "https://${data.azurerm_container_app.catalog[0].latest_revision_fqdn}/swagger/v1/swagger.json"
+    content_value  = "https://${data.azurerm_container_app.catalog[0].ingress[0].fqdn}/swagger/v1/swagger.json"
   }
 }
 
@@ -341,11 +341,11 @@ resource "azurerm_api_management_api" "payment" {
   path                  = "payment"
   protocols             = ["https"]
   subscription_required = false
-  service_url           = "https://${data.azurerm_container_app.payment[0].latest_revision_fqdn}"
+  service_url           = "https://${data.azurerm_container_app.payment[0].ingress[0].fqdn}"
 
   import {
     content_format = "openapi-link"
-    content_value  = "https://${data.azurerm_container_app.payment[0].latest_revision_fqdn}/swagger/v1/swagger.json"
+    content_value  = "https://${data.azurerm_container_app.payment[0].ingress[0].fqdn}/swagger/v1/swagger.json"
   }
 }
 
@@ -362,7 +362,7 @@ resource "azurerm_api_management_api_policy" "users" {
   resource_group_name = azurerm_resource_group.main.name
 
   xml_content = templatefile("${path.module}/policies/users-jwt.xml", {
-    auth_internal_fqdn = data.azurerm_container_app.auth[0].latest_revision_fqdn
+    auth_internal_fqdn = data.azurerm_container_app.auth[0].ingress[0].fqdn
   })
 }
 
@@ -374,7 +374,7 @@ resource "azurerm_api_management_api_policy" "catalog" {
   resource_group_name = azurerm_resource_group.main.name
 
   xml_content = templatefile("${path.module}/policies/catalog-jwt.xml", {
-    auth_internal_fqdn = data.azurerm_container_app.auth[0].latest_revision_fqdn
+    auth_internal_fqdn = data.azurerm_container_app.auth[0].ingress[0].fqdn
   })
 }
 
@@ -386,7 +386,7 @@ resource "azurerm_api_management_api_policy" "payment" {
   resource_group_name = azurerm_resource_group.main.name
 
   xml_content = templatefile("${path.module}/policies/payment-jwt.xml", {
-    auth_internal_fqdn = data.azurerm_container_app.auth[0].latest_revision_fqdn
+    auth_internal_fqdn = data.azurerm_container_app.auth[0].ingress[0].fqdn
   })
 }
 
