@@ -95,6 +95,38 @@ Configuração esperada nos appsettings:
 }
 ```
 
+## Observabilidade
+
+A stack escolhida para a Fase 3 e Prometheus + Grafana, hospedados no mesmo
+Azure Container Apps Environment para reduzir custo operacional. Os APIs Auth,
+Catalog e Payment expoem metricas HTTP em `/metrics`; o Prometheus coleta essas
+rotas pelo APIM, mantendo o gateway como unica entrada externa. O Grafana usa
+o Prometheus como datasource e provisiona o dashboard `FIAP Games - API
+Overview` automaticamente.
+
+Metricas principais:
+
+- requests por segundo por API;
+- percentual de respostas HTTP 5xx;
+- latencia P95;
+- total de requests no periodo selecionado.
+
+Os endpoints de negocio continuam protegidos por JWT. Apenas `GET /metrics`
+fica liberado na politica do APIM para permitir o scrape interno; os Container
+Apps continuam restritos ao IP do gateway.
+
+A Notification nao e um quarto API: sua migracao para Azure Function foi
+concluida no repositorio `FiapGames.Notification`. A Function usa Service Bus
+triggers e envia logs para Application Insights conectado ao Log Analytics
+compartilhado, com `FunctionName` e `InvocationId` para correlacao de cada
+execucao.
+
+Depois do apply do Terraform, a URL do Grafana e exibida no output
+`grafana_url`. O usuario padrao e `admin`; a senha vem de
+`grafana_admin_password` ou, quando omitida, da senha do RabbitMQ. Em producao,
+defina `grafana_admin_password` explicitamente em um arquivo de variaveis fora
+do Git.
+
 ## Variáveis de ambiente (Docker Compose)
 
 O `docker-compose.yml` foi parametrizado para evitar segredos fixos em arquivo.
