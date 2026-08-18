@@ -168,7 +168,7 @@ locals {
 
   grafana_password        = coalesce(var.grafana_admin_password, var.rabbitmq_default_password)
   api_gateway_host        = replace(replace(azurerm_api_management.main.gateway_url, "https://", ""), "http://", "")
-  prometheus_internal_url = "http://ca-prometheus-prod:9090"
+  prometheus_internal_url = "https://ca-prometheus-prod.internal.icyriver-917cd6a6.brazilsouth.azurecontainerapps.io"
 }
 
 resource "azurerm_resource_group" "main" {
@@ -636,7 +636,7 @@ resource "azurerm_container_app" "grafana" {
       }
 
       command = ["/bin/sh", "-c"]
-      args    = ["mkdir -p /tmp/grafana-provisioning/datasources /tmp/grafana-provisioning/dashboards; printf '%s\\n' 'apiVersion: 1' 'datasources:' '  - name: Prometheus' '    uid: prometheus' '    type: prometheus' '    access: proxy' '    url: http://ca-prometheus-prod:9090' '    isDefault: true' > /tmp/grafana-provisioning/datasources/prometheus.yaml; printf '%s\\n' 'apiVersion: 1' 'providers:' '  - name: FIAP Games' '    orgId: 1' '    type: file' '    disableDeletion: true' '    updateIntervalSeconds: 30' '    options:' '      path: /tmp/grafana-provisioning/dashboards' > /tmp/grafana-provisioning/dashboards/provider.yaml; echo '${filebase64("${path.module}/grafana/dashboards/fiapgames-overview.json")}' | base64 -d > /tmp/grafana-provisioning/dashboards/fiapgames-overview.json; exec /run.sh"]
+      args    = ["mkdir -p /tmp/grafana-provisioning/datasources /tmp/grafana-provisioning/dashboards; printf '%s\\n' 'apiVersion: 1' 'datasources:' '  - name: Prometheus' '    uid: prometheus' '    type: prometheus' '    access: proxy' '    url: ${local.prometheus_internal_url}' '    isDefault: true' > /tmp/grafana-provisioning/datasources/prometheus.yaml; printf '%s\\n' 'apiVersion: 1' 'providers:' '  - name: FIAP Games' '    orgId: 1' '    type: file' '    disableDeletion: true' '    updateIntervalSeconds: 30' '    options:' '      path: /tmp/grafana-provisioning/dashboards' > /tmp/grafana-provisioning/dashboards/provider.yaml; echo '${filebase64("${path.module}/grafana/dashboards/fiapgames-overview.json")}' | base64 -d > /tmp/grafana-provisioning/dashboards/fiapgames-overview.json; exec /run.sh"]
 
     }
   }
