@@ -630,6 +630,14 @@ resource "azurerm_container_app" "grafana" {
         value = local.prometheus_internal_url
       }
 
+      env {
+        name  = "GF_PATHS_PROVISIONING"
+        value = "/tmp/grafana-provisioning"
+      }
+
+      command = ["/bin/sh", "-c"]
+      args    = ["mkdir -p /tmp/grafana-provisioning/datasources /tmp/grafana-provisioning/dashboards; printf '%s\\n' 'apiVersion: 1' 'datasources:' '  - name: Prometheus' '    uid: prometheus' '    type: prometheus' '    access: proxy' '    url: http://ca-prometheus-prod:9090' '    isDefault: true' > /tmp/grafana-provisioning/datasources/prometheus.yaml; printf '%s\\n' 'apiVersion: 1' 'providers:' '  - name: FIAP Games' '    orgId: 1' '    type: file' '    disableDeletion: true' '    updateIntervalSeconds: 30' '    options:' '      path: /tmp/grafana-provisioning/dashboards' > /tmp/grafana-provisioning/dashboards/provider.yaml; echo '${filebase64("${path.module}/grafana/dashboards/fiapgames-overview.json")}' | base64 -d > /tmp/grafana-provisioning/dashboards/fiapgames-overview.json; exec /run.sh"]
+
     }
   }
 
