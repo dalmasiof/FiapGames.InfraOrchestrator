@@ -74,6 +74,27 @@ cd /c/git/FiapGames_MS/FiapGames.InfraOrchestrator
   - `FiapGames.Notification`
 - O bootstrap não faz clone nem pull; ele só valida a árvore local e sobe a stack.
 
+## Persistência poliglota e cache
+
+A arquitetura foi evoluída para combinar o melhor de cada tipo de armazenamento:
+
+- SQL Server continua como fonte da verdade para Auth, Catalog e Payment.
+- Redis foi adicionado ao Catalog para cache de leitura quente de jogos, promoções e biblioteca do usuário.
+- Cosmos DB com API MongoDB foi preparado para o Notification para armazenar histórico de notificações e eventos.
+
+Configuração esperada nos appsettings:
+
+```json
+{
+  "Redis": { "ConnectionString": "<redis-host>:6380,password=<senha>,ssl=True,abortConnect=False" },
+  "MongoDb": {
+    "ConnectionString": "mongodb://<cosmos-account>.mongo.cosmos.azure.com:10255/?ssl=true&replicaSet=globaldb&retrywrites=false&maxIdleTimeMS=120000&appName=@<nome>",
+    "DatabaseName": "fiapgames_notifications",
+    "CollectionName": "HistoricoNotificacoes"
+  }
+}
+```
+
 ## Variáveis de ambiente (Docker Compose)
 
 O `docker-compose.yml` foi parametrizado para evitar segredos fixos em arquivo.

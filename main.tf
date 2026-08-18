@@ -131,6 +131,8 @@ data "azurerm_container_app" "payment" {
 locals {
   resource_group_name = "rg-fiapgames-prod"
   unique_suffix       = substr(replace(data.azurerm_client_config.current.subscription_id, "-", ""), 0, 8)
+  redis_name          = "redis-fiapgames-prod"
+  cosmos_name         = "cosmos-fiapgames-prod"
 
   database_names = toset([
     "fiapgames_auth",
@@ -269,6 +271,43 @@ resource "azurerm_mssql_database" "services" {
   max_size_gb    = 2
   zone_redundant = false
   tags           = local.common_tags
+}
+
+resource "azurerm_redis_cache" "catalog_cache" {
+  name                          = local.redis_name
+  location                      = azurerm_resource_group.main.location
+  resource_group_name           = azurerm_resource_group.main.name
+  capacity                      = 0
+  family                        = "C"
+  sku_name                      = "Basic"
+  minimum_tls_version           = "1.2"
+  public_network_access_enabled = true
+  tags                          = local.common_tags
+}
+
+resource "azurerm_cosmosdb_account" "notification_history" {
+  name                = local.cosmos_name
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  offer_type          = "Standard"
+  kind                = "MongoDB"
+  tags                = local.common_tags
+
+  automatic_failover_enabled = false
+
+  consistency_policy {
+    consistency_level = "Session"
+  }
+
+  geo_location {
+    location          = azurerm_resource_group.main.location
+    failover_priority = 0
+    zone_redundant    = false
+  }
+
+  lifecycle {
+    ignore_changes = [capabilities]
+  }
 }
 
 resource "azurerm_log_analytics_workspace" "main" {
@@ -553,4 +592,26 @@ output "workload_managed_identity_client_id" {
 output "api_gateway_url" {
   description = "Public base URL for the only supported external entry point."
   value       = azurerm_api_management.main.gateway_url
+}
+
+output "redis_hostname" {
+  description = "Hostname of the Redis cache used by the Catalog API."
+  value       = azurerm_redis_cache.catalog_cache.hostname
+}
+
+output "redis_primary_key" {
+  description = "Primary access key for Redis. Use it only in managed secret stores."
+  value       = azurerm_redis_cache.catalog_cache.primary_access_key
+  sensitive   = true
+}
+
+output "cosmos_account_name" {
+  description = "Name of the Cosmos DB account used by Notification for Mongo API."
+  value       = azurerm_cosmosdb_account.notification_history.name
+}
+
+output "cosmos_endpoint" {
+  description = "Cosmos DB endpoint for MongoDB connection strings."
+  value       = azurerm_cosmosdb_account.notification_history.endpoint
+  sensitive   = true
 }
