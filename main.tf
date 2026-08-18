@@ -166,8 +166,9 @@ locals {
     managed_by  = "terraform"
   }
 
-  grafana_password = coalesce(var.grafana_admin_password, var.rabbitmq_default_password)
-  api_gateway_host = replace(replace(azurerm_api_management.main.gateway_url, "https://", ""), "http://", "")
+  grafana_password        = coalesce(var.grafana_admin_password, var.rabbitmq_default_password)
+  api_gateway_host        = replace(replace(azurerm_api_management.main.gateway_url, "https://", ""), "http://", "")
+  prometheus_internal_url = "http://ca-prometheus-prod:9090"
 }
 
 resource "azurerm_resource_group" "main" {
@@ -561,28 +562,7 @@ resource "azurerm_container_app" "prometheus" {
       memory = "0.5Gi"
 
       command = ["/bin/sh", "-c"]
-      args = [
-        <<-EOT
-        cat > /etc/prometheus/prometheus.yml <<'EOF'
-        global:
-          scrape_interval: 15s
-        scrape_configs:
-          - job_name: fiapgames-auth
-            metrics_path: /users/metrics
-            static_configs:
-              - targets: ['${local.api_gateway_host}']
-          - job_name: fiapgames-catalog
-            metrics_path: /catalog/metrics
-            static_configs:
-              - targets: ['${local.api_gateway_host}']
-          - job_name: fiapgames-payment
-            metrics_path: /payment/metrics
-            static_configs:
-              - targets: ['${local.api_gateway_host}']
-        EOF
-        exec /bin/prometheus --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus
-        EOT
-      ]
+      args    = ["printf '%s\\n' 'global:' '  scrape_interval: 15s' 'scrape_configs:' '  - job_name: fiapgames-auth' '    scheme: https' '    metrics_path: /users/metrics' '    static_configs:' '      - targets: [''${local.api_gateway_host}'']' '  - job_name: fiapgames-catalog' '    scheme: https' '    metrics_path: /catalog/metrics' '    static_configs:' '      - targets: [''${local.api_gateway_host}'']' '  - job_name: fiapgames-payment' '    scheme: https' '    metrics_path: /payment/metrics' '    static_configs:' '      - targets: [''${local.api_gateway_host}'']' > /tmp/prometheus.yml; exec /bin/prometheus --config.file=/tmp/prometheus.yml --storage.tsdb.path=/tmp/prometheus"]
     }
   }
 
@@ -647,7 +627,7 @@ resource "azurerm_container_app" "grafana" {
 
       env {
         name  = "GF_DATASOURCES_DEFAULT_URL"
-        value = "http://ca-prometheus:9090"
+        value = local.prometheus_internal_url
       }
 
     }
@@ -742,5 +722,5 @@ output "grafana_url" {
 
 output "prometheus_internal_url" {
   description = "Internal URL used by Grafana to query Prometheus."
-  value       = "http://ca-prometheus:9090"
+  value       = local.prometheus_internal_url
 }
