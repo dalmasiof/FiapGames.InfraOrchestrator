@@ -650,46 +650,6 @@ resource "azurerm_container_app" "grafana" {
         value = "http://ca-prometheus:9090"
       }
 
-      command = ["/bin/sh", "-c"]
-      args = [
-        <<-EOT
-        mkdir -p /etc/grafana/provisioning/datasources /etc/grafana/provisioning/dashboards /var/lib/grafana/dashboards
-        cat > /etc/grafana/provisioning/datasources/prometheus.yaml <<'EOF'
-        apiVersion: 1
-        datasources:
-          - name: Prometheus
-            type: prometheus
-            access: proxy
-            url: http://ca-prometheus:9090
-            isDefault: true
-        EOF
-        cat > /etc/grafana/provisioning/dashboards/default.yaml <<'EOF'
-        apiVersion: 1
-        providers:
-          - name: FIAP Games
-            folder: FIAP Games
-            type: file
-            options:
-              path: /var/lib/grafana/dashboards
-        EOF
-        cat > /var/lib/grafana/dashboards/fiapgames-overview.json <<'EOF'
-        {
-          "uid": "fiapgames-overview",
-          "title": "FIAP Games - API Overview",
-          "schemaVersion": 39,
-          "refresh": "15s",
-          "time": {"from": "now-30m", "to": "now"},
-          "panels": [
-            {"type":"timeseries","title":"Requests per second","gridPos":{"h":8,"w":12,"x":0,"y":0},"targets":[{"expr":"sum by (job) (rate(http_requests_received_total[5m]))","legendFormat":"{{job}}"}]},
-            {"type":"timeseries","title":"HTTP error rate","gridPos":{"h":8,"w":12,"x":12,"y":0},"targets":[{"expr":"sum(rate(http_requests_received_total{code=~\"5..\"}[5m])) / sum(rate(http_requests_received_total[5m]))","legendFormat":"5xx"}]},
-            {"type":"timeseries","title":"P95 request duration","gridPos":{"h":8,"w":12,"x":0,"y":8},"targets":[{"expr":"histogram_quantile(0.95, sum by (le, job) (rate(http_request_duration_seconds_bucket[5m])))","legendFormat":"{{job}}"}]},
-            {"type":"stat","title":"Total requests (5m)","gridPos":{"h":8,"w":12,"x":12,"y":8},"targets":[{"expr":"sum(increase(http_requests_received_total[5m]))","legendFormat":"requests"}]}
-          ]
-        }
-        EOF
-        exec /run.sh
-        EOT
-      ]
     }
   }
 
