@@ -198,7 +198,7 @@ locals {
     "ConnectionStrings--CatalogConnection"      = "Server=tcp:${azurerm_mssql_server.main.fully_qualified_domain_name},1433;Initial Catalog=fiapgames_catalog;User ID=${var.sql_admin_login};Password=${var.sql_admin_password};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
     "ConnectionStrings--NotificationConnection" = "Server=tcp:${azurerm_mssql_server.main.fully_qualified_domain_name},1433;Initial Catalog=fiapgames_notification;User ID=${var.sql_admin_login};Password=${var.sql_admin_password};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
     "ConnectionStrings--PaymentConnection"      = "Server=tcp:${azurerm_mssql_server.main.fully_qualified_domain_name},1433;Initial Catalog=fiapgames_payment;User ID=${var.sql_admin_login};Password=${var.sql_admin_password};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
-    "RabbitMq--HostName"                        = azurerm_container_app.rabbitmq.ingress[0].fqdn
+    "RabbitMq--HostName"                        = azurerm_container_app.rabbitmq.name
     "RabbitMq--Port"                            = "5672"
     "RabbitMq--UserName"                        = var.rabbitmq_default_user
     "RabbitMq--Password"                        = var.rabbitmq_default_password
@@ -228,14 +228,10 @@ resource "azurerm_key_vault_secret" "jwt_jwks_uri" {
   count = var.configure_apim_apis ? 1 : 0
 
   name         = "Jwt--JwksUri"
-  value        = "${azurerm_api_management.main.gateway_url}/users/.well-known/jwks"
+  value        = "http://ca-auth-api/.well-known/jwks"
   key_vault_id = azurerm_key_vault.main.id
 
   depends_on = [azurerm_role_assignment.current_user_key_vault_secrets_officer]
-
-  lifecycle {
-    ignore_changes = [value]
-  }
 }
 
 resource "azurerm_mssql_server" "main" {
@@ -291,7 +287,7 @@ resource "azurerm_container_app_environment" "main" {
 }
 
 resource "azurerm_api_management" "main" {
-  name                = "apim-fiapgames-prod"
+  name                = "apim-fiapgames-prod-${local.unique_suffix}-v2"
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
   publisher_name      = var.apim_publisher_name
@@ -301,6 +297,10 @@ resource "azurerm_api_management" "main" {
 
   identity {
     type = "SystemAssigned"
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
@@ -318,8 +318,8 @@ resource "azurerm_api_management_api" "auth" {
   service_url           = "https://${data.azurerm_container_app.auth[0].ingress[0].fqdn}"
 
   import {
-    content_format = "openapi-link"
-    content_value  = "https://${data.azurerm_container_app.auth[0].ingress[0].fqdn}/swagger/v1/swagger.json"
+    content_format = "openapi+json"
+    content_value  = file("${path.module}/policies/fiapgames-auth_openapi+json.json")
   }
 }
 
@@ -337,8 +337,8 @@ resource "azurerm_api_management_api" "catalog" {
   service_url           = "https://${data.azurerm_container_app.catalog[0].ingress[0].fqdn}"
 
   import {
-    content_format = "openapi-link"
-    content_value  = "https://${data.azurerm_container_app.catalog[0].ingress[0].fqdn}/swagger/v1/swagger.json"
+    content_format = "openapi+json"
+    content_value  = file("${path.module}/policies/fiapgames-catalog_openapi+json.json")
   }
 }
 
@@ -356,8 +356,8 @@ resource "azurerm_api_management_api" "payment" {
   service_url           = "https://${data.azurerm_container_app.payment[0].ingress[0].fqdn}"
 
   import {
-    content_format = "openapi-link"
-    content_value  = "https://${data.azurerm_container_app.payment[0].ingress[0].fqdn}/swagger/v1/swagger.json"
+    content_format = "openapi+json"
+    content_value  = file("${path.module}/policies/fiapgames-payment_openapi+json.json")
   }
 }
 
@@ -444,6 +444,7 @@ resource "azurerm_container_app" "rabbitmq" {
   container_app_environment_id = azurerm_container_app_environment.main.id
   resource_group_name          = azurerm_resource_group.main.name
   revision_mode                = "Single"
+  workload_profile_name        = "Consumption"
   tags                         = local.common_tags
 
   secret {
@@ -553,4 +554,14 @@ output "workload_managed_identity_client_id" {
 output "api_gateway_url" {
   description = "Public base URL for the only supported external entry point."
   value       = azurerm_api_management.main.gateway_url
+}
+
+output "container_registry_login_server" {
+  description = "ACR login server used by application deployment workflows."
+  value       = azurerm_container_registry.main.login_server
+}
+
+output "key_vault_uri" {
+  description = "Key Vault URI used by application workloads."
+  value       = azurerm_key_vault.main.vault_uri
 }

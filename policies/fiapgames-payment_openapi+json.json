@@ -1,0 +1,170 @@
+{
+    "openapi": "3.0.1",
+    "info": {
+        "title": "FIAP Games Payment API",
+        "description": "",
+        "version": "1.0"
+    },
+    "servers": [
+        {
+            "url": "https://apim-fiapgames-prod-64f434dd.azure-api.net/payment"
+        }
+    ],
+    "paths": {
+        "/api/Conta/{idConta}/saldo": {
+            "get": {
+                "tags": [
+                    "Conta"
+                ],
+                "summary": "/api/Conta/{idConta}/saldo - GET",
+                "operationId": "get-api-conta-idconta-saldo",
+                "parameters": [
+                    {
+                        "name": "idConta",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/api/Conta/adicionar-saldo": {
+            "post": {
+                "tags": [
+                    "Conta"
+                ],
+                "summary": "/api/Conta/adicionar-saldo - POST",
+                "operationId": "post-api-conta-adicionar-saldo",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ContaDto"
+                            },
+                            "example": {
+                                "idConta": 0,
+                                "valor": 0
+                            }
+                        },
+                        "text/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ContaDto"
+                            },
+                            "example": {
+                                "idConta": 0,
+                                "valor": 0
+                            }
+                        },
+                        "application/*+json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ContaDto"
+                            },
+                            "example": {
+                                "idConta": 0,
+                                "valor": 0
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/api/Conta": {
+            "get": {
+                "tags": [
+                    "Conta"
+                ],
+                "summary": "/api/Conta - GET",
+                "operationId": "get-api-conta",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/api/Pagamento/usuario/{idUsuario}": {
+            "get": {
+                "tags": [
+                    "Pagamento"
+                ],
+                "summary": "/api/Pagamento/usuario/{idUsuario} - GET",
+                "operationId": "get-api-pagamento-usuario-idusuario",
+                "parameters": [
+                    {
+                        "name": "idUsuario",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "ContaDto": {
+                "type": "object",
+                "properties": {
+                    "idConta": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "valor": {
+                        "type": "number",
+                        "format": "double"
+                    }
+                },
+                "additionalProperties": false
+            }
+        },
+        "securitySchemes": {
+            "apiKeyHeader": {
+                "type": "apiKey",
+                "name": "Ocp-Apim-Subscription-Key",
+                "in": "header"
+            },
+            "apiKeyQuery": {
+                "type": "apiKey",
+                "name": "subscription-key",
+                "in": "query"
+            }
+        }
+    },
+    "security": [
+        {
+            "apiKeyHeader": []
+        },
+        {
+            "apiKeyQuery": []
+        }
+    ],
+    "tags": [
+        {
+            "name": "Conta"
+        },
+        {
+            "name": "Pagamento"
+        }
+    ]
+}

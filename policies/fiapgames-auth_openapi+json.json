@@ -1,0 +1,427 @@
+{
+    "openapi": "3.0.1",
+    "info": {
+        "title": "FIAP Games Users API",
+        "description": "",
+        "version": "1.0"
+    },
+    "servers": [
+        {
+            "url": "https://apim-fiapgames-prod-64f434dd.azure-api.net/users"
+        }
+    ],
+    "paths": {
+        "/api/Auth/login": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "/api/Auth/login - POST",
+                "operationId": "post-api-auth-login",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LogarLoginDTO"
+                            },
+                            "example": {
+                                "email": "string",
+                                "passwordHash": "string"
+                            }
+                        },
+                        "text/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LogarLoginDTO"
+                            },
+                            "example": {
+                                "email": "string",
+                                "passwordHash": "string"
+                            }
+                        },
+                        "application/*+json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LogarLoginDTO"
+                            },
+                            "example": {
+                                "email": "string",
+                                "passwordHash": "string"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/api/Auth/trocar-senha": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "/api/Auth/trocar-senha - POST",
+                "operationId": "post-api-auth-trocar-senha",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TrocarSenhaDTO"
+                            },
+                            "example": {
+                                "email": "string",
+                                "novaSenha": "string"
+                            }
+                        },
+                        "text/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TrocarSenhaDTO"
+                            },
+                            "example": {
+                                "email": "string",
+                                "novaSenha": "string"
+                            }
+                        },
+                        "application/*+json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TrocarSenhaDTO"
+                            },
+                            "example": {
+                                "email": "string",
+                                "novaSenha": "string"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/.well-known/jwks": {
+            "get": {
+                "tags": [
+                    "Jwks"
+                ],
+                "summary": "/.well-known/jwks - GET",
+                "operationId": "get-well-known-jwks",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/api/Login": {
+            "post": {
+                "tags": [
+                    "Login"
+                ],
+                "summary": "/api/Login - POST",
+                "operationId": "post-api-login",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CriarLoginDTO"
+                            },
+                            "example": {
+                                "nome": "string",
+                                "email": "string",
+                                "passwordHash": "string",
+                                "tipoUsuario": 0
+                            }
+                        },
+                        "text/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CriarLoginDTO"
+                            },
+                            "example": {
+                                "nome": "string",
+                                "email": "string",
+                                "passwordHash": "string",
+                                "tipoUsuario": 0
+                            }
+                        },
+                        "application/*+json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CriarLoginDTO"
+                            },
+                            "example": {
+                                "nome": "string",
+                                "email": "string",
+                                "passwordHash": "string",
+                                "tipoUsuario": 0
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            },
+            "get": {
+                "tags": [
+                    "Login"
+                ],
+                "summary": "/api/Login - GET",
+                "operationId": "get-api-login",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Login"
+                ],
+                "summary": "/api/Login - PUT",
+                "operationId": "put-api-login",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AtualizarLoginDTO"
+                            },
+                            "example": {
+                                "idLogin": 0,
+                                "nome": "string",
+                                "email": "string",
+                                "passwordHash": "string"
+                            }
+                        },
+                        "text/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AtualizarLoginDTO"
+                            },
+                            "example": {
+                                "idLogin": 0,
+                                "nome": "string",
+                                "email": "string",
+                                "passwordHash": "string"
+                            }
+                        },
+                        "application/*+json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AtualizarLoginDTO"
+                            },
+                            "example": {
+                                "idLogin": 0,
+                                "nome": "string",
+                                "email": "string",
+                                "passwordHash": "string"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/api/Login/{id}": {
+            "get": {
+                "tags": [
+                    "Login"
+                ],
+                "summary": "/api/Login/{id} - GET",
+                "operationId": "get-api-login-id",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Login"
+                ],
+                "summary": "/api/Login/{id} - DELETE",
+                "operationId": "delete-api-login-id",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/api/Login/email/{email}": {
+            "get": {
+                "tags": [
+                    "Login"
+                ],
+                "summary": "/api/Login/email/{email} - GET",
+                "operationId": "get-api-login-email-email",
+                "parameters": [
+                    {
+                        "name": "email",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/.well-known/openid-configuration": {
+            "get": {
+                "tags": [
+                    "OpenIdConfiguration"
+                ],
+                "summary": "/.well-known/openid-configuration - GET",
+                "operationId": "get-well-known-openid-configuration",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "AtualizarLoginDTO": {
+                "type": "object",
+                "properties": {
+                    "idLogin": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "nome": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "email": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "passwordHash": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "CriarLoginDTO": {
+                "type": "object",
+                "properties": {
+                    "nome": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "email": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "passwordHash": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "tipoUsuario": {
+                        "type": "integer",
+                        "format": "int32"
+                    }
+                },
+                "additionalProperties": false
+            },
+            "LogarLoginDTO": {
+                "type": "object",
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "passwordHash": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "TrocarSenhaDTO": {
+                "type": "object",
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "novaSenha": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            }
+        },
+        "securitySchemes": {
+            "apiKeyHeader": {
+                "type": "apiKey",
+                "name": "Ocp-Apim-Subscription-Key",
+                "in": "header"
+            },
+            "apiKeyQuery": {
+                "type": "apiKey",
+                "name": "subscription-key",
+                "in": "query"
+            }
+        }
+    },
+    "security": [
+        {
+            "apiKeyHeader": []
+        },
+        {
+            "apiKeyQuery": []
+        }
+    ],
+    "tags": [
+        {
+            "name": "Auth"
+        },
+        {
+            "name": "Jwks"
+        },
+        {
+            "name": "Login"
+        },
+        {
+            "name": "OpenIdConfiguration"
+        }
+    ]
+}
