@@ -14,6 +14,11 @@ az account set --subscription $SubscriptionId
 
 foreach ($app in $containerApps) {
     az containerapp update --name $app --resource-group $ResourceGroup --min-replicas 0 --max-replicas 1 --output none
+
+    $activeRevisions = az containerapp revision list --name $app --resource-group $ResourceGroup --query "[?properties.active].name" --output tsv
+    foreach ($revision in $activeRevisions) {
+        az containerapp revision deactivate --name $app --resource-group $ResourceGroup --revision $revision --output none
+    }
 }
 
 az functionapp stop --name $functionApp --resource-group $ResourceGroup --output none

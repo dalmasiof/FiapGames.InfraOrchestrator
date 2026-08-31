@@ -11,6 +11,12 @@ $databases = @("fiapgames_auth", "fiapgames_catalog", "fiapgames_payment", "fiap
 
 az account set --subscription $SubscriptionId
 
+$containerApps = @("ca-auth-api", "ca-catalog-api", "ca-payment-api", "ca-rabbitmq-prod")
+foreach ($app in $containerApps) {
+    $latestRevision = az containerapp revision list --name $app --resource-group $ResourceGroup --query "sort_by(@, &properties.createdTime)[-1].name" --output tsv
+    az containerapp revision activate --name $app --resource-group $ResourceGroup --revision $latestRevision --output none
+}
+
 foreach ($database in $databases) {
     az sql db update --name $database --server $sqlServer --resource-group $ResourceGroup --edition Basic --capacity 5 --compute-model Provisioned --output none
 }
