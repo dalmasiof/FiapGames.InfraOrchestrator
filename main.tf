@@ -168,7 +168,7 @@ locals {
 
   grafana_password        = coalesce(var.grafana_admin_password, var.rabbitmq_default_password)
   api_gateway_host        = replace(replace(azurerm_api_management.main.gateway_url, "https://", ""), "http://", "")
-  prometheus_internal_url = "https://ca-prometheus-prod.internal.icyriver-917cd6a6.brazilsouth.azurecontainerapps.io"
+  prometheus_internal_url = "https://${azurerm_container_app.prometheus.ingress[0].fqdn}"
 }
 
 resource "azurerm_resource_group" "main" {
@@ -360,7 +360,7 @@ resource "azurerm_container_app_environment" "main" {
 }
 
 resource "azurerm_api_management" "main" {
-  name                = "apim-fiapgames-prod"
+  name                = "apim-fiapgames-prod-${local.unique_suffix}-v2"
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
   publisher_name      = var.apim_publisher_name
