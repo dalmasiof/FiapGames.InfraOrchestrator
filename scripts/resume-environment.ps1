@@ -13,7 +13,10 @@ az account set --subscription $SubscriptionId
 
 $containerApps = @("ca-auth-api", "ca-catalog-api", "ca-payment-api", "ca-rabbitmq-prod")
 foreach ($app in $containerApps) {
-    $latestRevision = az containerapp revision list --name $app --resource-group $ResourceGroup --query "sort_by(@, &properties.createdTime)[-1].name" --output tsv
+    $latestRevision = az containerapp revision list --name $app --resource-group $ResourceGroup --all --query "sort_by(@, &properties.createdTime)[-1].name" --output tsv
+    if ([string]::IsNullOrWhiteSpace($latestRevision)) {
+        throw "Nenhuma revisao encontrada para $app."
+    }
     az containerapp revision activate --name $app --resource-group $ResourceGroup --revision $latestRevision --output none
 }
 
