@@ -5,6 +5,9 @@ jwt-private.pem.pub
 # Local environment secrets
 .env
 
+# IDE user-specific settings
+*.user
+
 # Terraform local state and provider cache
 .terraform/
 *.tfstate

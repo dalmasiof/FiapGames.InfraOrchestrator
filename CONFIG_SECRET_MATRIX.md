@@ -1,63 +1,34 @@
-# Matriz ConfigMap x Secret
+# Configuration and secret matrix
 
-## Auth
+Production secrets are stored in Azure Key Vault and consumed with the user-assigned managed identity `id-fiapgames-workloads-prod`. They must not be committed to Git or stored in application settings as plain text.
 
-| Chave | Fonte alvo |
-| --- | --- |
-| ASPNETCORE_ENVIRONMENT | ConfigMap |
-| ASPNETCORE_URLS | ConfigMap |
-| Jwt__Issuer | ConfigMap |
-| Jwt__Audience | ConfigMap |
-| RabbitMq__HostName | ConfigMap |
-| RabbitMq__Port | ConfigMap |
-| ConnectionStrings__FIAPGamesConnection | Secret |
-| Jwt__Key | Secret |
-| RabbitMq__UserName | Secret |
-| RabbitMq__Password | Secret |
+## Azure Key Vault
 
-## Catalog
+| Secret | Consumer | Purpose |
+| --- | --- | --- |
+| `ConnectionStrings--AuthConnection` | Auth API | Auth database connection |
+| `ConnectionStrings--CatalogConnection` | Catalog API | Catalog database connection |
+| `ConnectionStrings--PaymentConnection` | Payment API | Payment database connection |
+| `ConnectionStrings--NotificationConnection` | Notification Function | Notification database connection |
+| `Jwt--PrivateKey` | Auth API | PKCS#8 RSA private key used for RS256 signing |
+| `RabbitMq--UserName` | APIs | RabbitMQ credential |
+| `RabbitMq--Password` | APIs | RabbitMQ credential |
 
-| Chave | Fonte alvo |
-| --- | --- |
-| ASPNETCORE_ENVIRONMENT | ConfigMap |
-| ASPNETCORE_URLS | ConfigMap |
-| Jwt__Issuer | ConfigMap |
-| Jwt__Audience | ConfigMap |
-| RabbitMq__HostName | ConfigMap |
-| RabbitMq__Port | ConfigMap |
-| ConnectionStrings__FIAPGamesConnection | Secret |
-| Jwt__Key | Secret |
-| RabbitMq__UserName | Secret |
-| RabbitMq__Password | Secret |
+The public RSA key is published by Auth as JWKS. Catalog, Payment and APIM validate tokens through that endpoint; they do not receive the private key.
 
-## Payment
+## GitHub Actions
 
-| Chave | Fonte alvo |
-| --- | --- |
-| ASPNETCORE_ENVIRONMENT | ConfigMap |
-| ASPNETCORE_URLS | ConfigMap |
-| RabbitMq__HostName | ConfigMap |
-| RabbitMq__Port | ConfigMap |
-| ConnectionStrings__FIAPGamesConnection | Secret |
-| RabbitMq__UserName | Secret |
-| RabbitMq__Password | Secret |
+| Name | Type | Purpose |
+| --- | --- | --- |
+| `AZURE_CREDENTIALS` | Repository secret | Azure login JSON for the deployment service principal |
+| `ACR_USERNAME` | Repository secret | ACR push and migration-job pull |
+| `ACR_PASSWORD` | Repository secret | ACR push and migration-job pull |
+| `KEY_VAULT_URI` | Repository variable | Key Vault URI |
+| `AZURE_MANAGED_IDENTITY_RESOURCE_ID` | Repository variable | Workload identity resource ID |
+| `AZURE_MANAGED_IDENTITY_CLIENT_ID` | Repository variable | Workload identity client ID |
 
-## Notification
+Use the exact names expected by each workflow. Never print secret values in workflow logs.
 
-| Chave | Fonte alvo |
-| --- | --- |
-| ASPNETCORE_ENVIRONMENT | ConfigMap |
-| RabbitMq__HostName | ConfigMap |
-| RabbitMq__Port | ConfigMap |
-| ConnectionStrings__DefaultConnection | Secret |
-| RabbitMq__UserName | Secret |
-| RabbitMq__Password | Secret |
+## Local development
 
-## Infra compartilhada
-
-| Chave | Fonte alvo |
-| --- | --- |
-| ACCEPT_EULA | ConfigMap |
-| MSSQL_SA_PASSWORD | Secret |
-| RABBITMQ_DEFAULT_USER | ConfigMap |
-| RABBITMQ_DEFAULT_PASS | Secret |
+Copy `.env.example` to `.env` and keep `.env` and all PEM files untracked. The local Compose environment mounts `jwt-private.pem` as a Docker secret.
