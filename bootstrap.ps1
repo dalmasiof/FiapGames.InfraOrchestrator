@@ -1,33 +1,31 @@
 $ErrorActionPreference = 'Stop'
 
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$rootDir = 'C:\git\FiapGames_MS'
-
+$rootDir = Resolve-Path (Join-Path $PSScriptRoot '..')
 $repos = @(
     'FiapGame.AuthService',
     'FiapGame.PaymentService',
-    'FiapGames.Catalog',
-    'FiapGames.Notification'
+    'FiapGames.Catalog'
 )
 
-Write-Host "Bootstrap: validando workspace em $rootDir..."
-if (-not (Test-Path $rootDir)) {
-    throw "Workspace não encontrado em $rootDir. Crie a estrutura esperada antes de executar o bootstrap."
-}
-
+Write-Host "Bootstrap: validating workspace at $rootDir..."
 foreach ($repoName in $repos) {
     $repoPath = Join-Path $rootDir $repoName
     if (-not (Test-Path $repoPath)) {
-        throw "Repositório ausente: $repoPath"
+        throw "Repository not found: $repoPath"
     }
 }
 
-Write-Host 'Bootstrap: subindo a aplicação com Docker Compose...'
-Push-Location $scriptDir
+if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+    throw "Command 'docker' not found in PATH."
+}
+
+Push-Location $PSScriptRoot
 try {
+    docker compose config --quiet
     docker compose up -d --build
-} finally {
+}
+finally {
     Pop-Location
 }
 
-Write-Host 'Aplicação orquestrada iniciada com sucesso.'
+Write-Host 'Local API environment started successfully.'

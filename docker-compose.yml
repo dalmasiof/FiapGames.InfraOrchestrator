@@ -190,46 +190,6 @@ services:
     networks:
       - fiapgames-network
 
-  notification-worker:
-    build:
-      context: ../FiapGames.Notification
-      dockerfile: Dockerfile
-    container_name: fiapgames-notification-worker
-    ports:
-      - "8084:8080"
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__NotificationConnection: "${NOTIFICATION_CONNECTION_STRING:-Server=sqlserver,1433;Database=fiapgames_notification;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False;Connect Timeout=60;ConnectRetryCount=20;ConnectRetryInterval=5}"
-      RabbitMq__HostName: "rabbitmq"
-      RabbitMq__Port: "5672"
-      RabbitMq__UserName: "${RABBITMQ_USERNAME:-guest}"
-      RabbitMq__Password: "${RABBITMQ_PASSWORD:-guest}"
-    depends_on:
-      notification-migrate:
-        condition: service_completed_successfully
-      rabbitmq:
-        condition: service_healthy
-    networks:
-      - fiapgames-network
-
-  notification-migrate:
-    build:
-      context: ../FiapGames.Notification
-      dockerfile: Dockerfile
-    command: ["--migrate"]
-    restart: "no"
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__NotificationConnection: "${NOTIFICATION_CONNECTION_STRING:-Server=sqlserver,1433;Database=fiapgames_notification;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False}"
-      RabbitMq__HostName: "rabbitmq"
-      RabbitMq__UserName: "${RABBITMQ_USERNAME:-guest}"
-      RabbitMq__Password: "${RABBITMQ_PASSWORD:-guest}"
-    depends_on:
-      sqlserver:
-        condition: service_healthy
-    networks:
-      - fiapgames-network
-
 volumes:
   sqlserver-data:
 

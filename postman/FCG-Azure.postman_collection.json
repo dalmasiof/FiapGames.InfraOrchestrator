@@ -1,0 +1,492 @@
+{
+  "info": {
+    "_postman_id": "d08b6f55-cb8c-4b4a-a8fd-fc9a2e0d0001",
+    "name": "FIAP Cloud Games - Azure APIM",
+    "description": "Collection para validar Auth, Catalog e Payment exclusivamente pelo Azure API Management.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://apim-fiapgames-prod-64f434dd-v2.azure-api.net"
+    },
+    {
+      "key": "userToken",
+      "value": ""
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "loginId",
+      "value": "1"
+    },
+    {
+      "key": "jogoId",
+      "value": "1"
+    },
+    {
+      "key": "promocaoId",
+      "value": "1"
+    },
+    {
+      "key": "contaId",
+      "value": "1"
+    },
+    {
+      "key": "usuarioId",
+      "value": "1"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Auth",
+      "item": [
+        {
+          "name": "Login - Usuario",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@user.com\",\n  \"passwordHash\": \"User@123\"\n}"
+            },
+            "url": "{{baseUrl}}/users/api/Auth/login"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login realizado', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const token = body.token || body.accessToken;",
+                  "pm.expect(token, 'JWT ausente').to.be.a('string').and.not.empty;",
+                  "pm.collectionVariables.set('userToken', token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login - Administrador",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@admin.com\",\n  \"passwordHash\": \"Admin@123\"\n}"
+            },
+            "url": "{{baseUrl}}/users/api/Auth/login"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login administrativo realizado', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const token = body.token || body.accessToken;",
+                  "pm.expect(token, 'JWT ausente').to.be.a('string').and.not.empty;",
+                  "pm.collectionVariables.set('adminToken', token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "JWKS",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/users/.well-known/jwks"
+          }
+        },
+        {
+          "name": "OpenID Configuration",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/users/.well-known/openid-configuration"
+          }
+        },
+        {
+          "name": "Criar Usuario",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Usuario Postman\",\n  \"email\": \"postman@example.com\",\n  \"passwordHash\": \"Postman@123\",\n  \"tipoUsuario\": 1\n}"
+            },
+            "url": "{{baseUrl}}/users/api/Login"
+          }
+        },
+        {
+          "name": "Listar Usuarios",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/users/api/Login"
+          }
+        },
+        {
+          "name": "Obter Usuario por ID",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/users/api/Login/{{loginId}}"
+          }
+        },
+        {
+          "name": "Trocar Senha",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@user.com\",\n  \"novaSenha\": \"NovaSenha@123\"\n}"
+            },
+            "url": "{{baseUrl}}/users/api/Auth/trocar-senha"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Catalog",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{userToken}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "Listar Jogos",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/catalog/api/Jogo"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Catalog acessivel', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Obter Jogo",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/catalog/api/Jogo/{{jogoId}}"
+          }
+        },
+        {
+          "name": "Criar Jogo",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Jogo Postman\",\n  \"preco\": 59.90,\n  \"descricao\": \"Jogo criado para teste da API\"\n}"
+            },
+            "url": "{{baseUrl}}/catalog/api/Jogo"
+          }
+        },
+        {
+          "name": "Aplicar Promocao ao Jogo",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jogoId\": {{jogoId}},\n  \"promocaoId\": {{promocaoId}}\n}"
+            },
+            "url": "{{baseUrl}}/catalog/api/Jogo/promocao"
+          }
+        },
+        {
+          "name": "Listar Promocoes",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/catalog/api/Promocao"
+          }
+        },
+        {
+          "name": "Criar Promocao",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Promocao Postman\",\n  \"taxaDesconto\": 20,\n  \"dataInicio\": \"2026-08-30T00:00:00Z\",\n  \"dataFim\": \"2026-12-31T23:59:59Z\"\n}"
+            },
+            "url": "{{baseUrl}}/catalog/api/Promocao"
+          }
+        },
+        {
+          "name": "Obter Biblioteca",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/catalog/api/Biblioteca"
+          }
+        },
+        {
+          "name": "Listar Compras",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/catalog/api/Compra"
+          }
+        },
+        {
+          "name": "Criar Compra",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jogosIds\": [{{jogoId}}]\n}"
+            },
+            "url": "{{baseUrl}}/catalog/api/Compra"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Payment",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{adminToken}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "Listar Contas - Admin",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/payment/api/Conta"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Payment acessivel para admin', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Obter Saldo",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/payment/api/Conta/{{contaId}}/saldo"
+          }
+        },
+        {
+          "name": "Adicionar Saldo - Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idConta\": {{contaId}},\n  \"valor\": 100.00\n}"
+            },
+            "url": "{{baseUrl}}/payment/api/Conta/adicionar-saldo"
+          }
+        },
+        {
+          "name": "Historico por Usuario",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/payment/api/Pagamento/usuario/{{usuarioId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Security Checks",
+      "item": [
+        {
+          "name": "Catalog sem Token - Espera 401",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "url": "{{baseUrl}}/catalog/api/Jogo"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('JWT obrigatorio', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Payment com Usuario - Espera 403",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/payment/api/Conta"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin obrigatorio', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

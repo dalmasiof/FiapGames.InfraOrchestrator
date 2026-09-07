@@ -1,0 +1,539 @@
+{
+    "openapi": "3.0.1",
+    "info": {
+        "title": "FIAP Games Catalog API",
+        "description": "",
+        "version": "1.0"
+    },
+    "servers": [
+        {
+            "url": "https://apim-fiapgames-prod-64f434dd.azure-api.net/catalog"
+        }
+    ],
+    "paths": {
+        "/api/Biblioteca/jogos/{jogoId}": {
+            "delete": {
+                "tags": [
+                    "Biblioteca"
+                ],
+                "summary": "/api/Biblioteca/jogos/{jogoId} - DELETE",
+                "operationId": "delete-api-biblioteca-jogos-jogoid",
+                "parameters": [
+                    {
+                        "name": "jogoId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/api/Biblioteca": {
+            "get": {
+                "tags": [
+                    "Biblioteca"
+                ],
+                "summary": "/api/Biblioteca - GET",
+                "operationId": "get-api-biblioteca",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/api/Compra": {
+            "post": {
+                "tags": [
+                    "Compra"
+                ],
+                "summary": "/api/Compra - POST",
+                "operationId": "post-api-compra",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CriarCompraDto"
+                            },
+                            "example": {
+                                "jogosIds": [
+                                    0
+                                ]
+                            }
+                        },
+                        "text/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CriarCompraDto"
+                            },
+                            "example": {
+                                "jogosIds": [
+                                    0
+                                ]
+                            }
+                        },
+                        "application/*+json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CriarCompraDto"
+                            },
+                            "example": {
+                                "jogosIds": [
+                                    0
+                                ]
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            },
+            "get": {
+                "tags": [
+                    "Compra"
+                ],
+                "summary": "/api/Compra - GET",
+                "operationId": "get-api-compra",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/api/Jogo": {
+            "post": {
+                "tags": [
+                    "Jogo"
+                ],
+                "summary": "/api/Jogo - POST",
+                "operationId": "post-api-jogo",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CriarJogoDto"
+                            },
+                            "example": {
+                                "nome": "string",
+                                "preco": 0,
+                                "descricao": "string"
+                            }
+                        },
+                        "text/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CriarJogoDto"
+                            },
+                            "example": {
+                                "nome": "string",
+                                "preco": 0,
+                                "descricao": "string"
+                            }
+                        },
+                        "application/*+json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CriarJogoDto"
+                            },
+                            "example": {
+                                "nome": "string",
+                                "preco": 0,
+                                "descricao": "string"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            },
+            "get": {
+                "tags": [
+                    "Jogo"
+                ],
+                "summary": "/api/Jogo - GET",
+                "operationId": "get-api-jogo",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/api/Jogo/promocao": {
+            "post": {
+                "tags": [
+                    "Jogo"
+                ],
+                "summary": "/api/Jogo/promocao - POST",
+                "operationId": "post-api-jogo-promocao",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AplicarPromocaoDto"
+                            },
+                            "example": {
+                                "jogoId": 0,
+                                "promocaoId": 0
+                            }
+                        },
+                        "text/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AplicarPromocaoDto"
+                            },
+                            "example": {
+                                "jogoId": 0,
+                                "promocaoId": 0
+                            }
+                        },
+                        "application/*+json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AplicarPromocaoDto"
+                            },
+                            "example": {
+                                "jogoId": 0,
+                                "promocaoId": 0
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/api/Jogo/{id}": {
+            "get": {
+                "tags": [
+                    "Jogo"
+                ],
+                "summary": "/api/Jogo/{id} - GET",
+                "operationId": "get-api-jogo-id",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/api/Promocao": {
+            "post": {
+                "tags": [
+                    "Promocao"
+                ],
+                "summary": "/api/Promocao - POST",
+                "operationId": "post-api-promocao",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CriarPromocaoDto"
+                            },
+                            "example": {
+                                "nome": "string",
+                                "taxaDesconto": 0,
+                                "dataInicio": "string",
+                                "dataFim": "string"
+                            }
+                        },
+                        "text/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CriarPromocaoDto"
+                            },
+                            "example": {
+                                "nome": "string",
+                                "taxaDesconto": 0,
+                                "dataInicio": "string",
+                                "dataFim": "string"
+                            }
+                        },
+                        "application/*+json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CriarPromocaoDto"
+                            },
+                            "example": {
+                                "nome": "string",
+                                "taxaDesconto": 0,
+                                "dataInicio": "string",
+                                "dataFim": "string"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Promocao"
+                ],
+                "summary": "/api/Promocao - PUT",
+                "operationId": "put-api-promocao",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AtualizarPromocaoDto"
+                            },
+                            "example": {
+                                "id": 0,
+                                "nome": "string",
+                                "taxaDesconto": 0,
+                                "dataInicio": "string",
+                                "dataFim": "string"
+                            }
+                        },
+                        "text/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AtualizarPromocaoDto"
+                            },
+                            "example": {
+                                "id": 0,
+                                "nome": "string",
+                                "taxaDesconto": 0,
+                                "dataInicio": "string",
+                                "dataFim": "string"
+                            }
+                        },
+                        "application/*+json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AtualizarPromocaoDto"
+                            },
+                            "example": {
+                                "id": 0,
+                                "nome": "string",
+                                "taxaDesconto": 0,
+                                "dataInicio": "string",
+                                "dataFim": "string"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            },
+            "get": {
+                "tags": [
+                    "Promocao"
+                ],
+                "summary": "/api/Promocao - GET",
+                "operationId": "get-api-promocao",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/api/Promocao/{id}": {
+            "get": {
+                "tags": [
+                    "Promocao"
+                ],
+                "summary": "/api/Promocao/{id} - GET",
+                "operationId": "get-api-promocao-id",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Promocao"
+                ],
+                "summary": "/api/Promocao/{id} - DELETE",
+                "operationId": "delete-api-promocao-id",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "AplicarPromocaoDto": {
+                "type": "object",
+                "properties": {
+                    "jogoId": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "promocaoId": {
+                        "type": "integer",
+                        "format": "int32"
+                    }
+                },
+                "additionalProperties": false
+            },
+            "AtualizarPromocaoDto": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "nome": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "taxaDesconto": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "dataInicio": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "dataFim": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                },
+                "additionalProperties": false
+            },
+            "CriarCompraDto": {
+                "type": "object",
+                "properties": {
+                    "jogosIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer",
+                            "format": "int32"
+                        },
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "CriarJogoDto": {
+                "type": "object",
+                "properties": {
+                    "nome": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "preco": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "descricao": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "CriarPromocaoDto": {
+                "type": "object",
+                "properties": {
+                    "nome": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "taxaDesconto": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "dataInicio": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "dataFim": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                },
+                "additionalProperties": false
+            }
+        },
+        "securitySchemes": {
+            "apiKeyHeader": {
+                "type": "apiKey",
+                "name": "Ocp-Apim-Subscription-Key",
+                "in": "header"
+            },
+            "apiKeyQuery": {
+                "type": "apiKey",
+                "name": "subscription-key",
+                "in": "query"
+            }
+        }
+    },
+    "security": [
+        {
+            "apiKeyHeader": []
+        },
+        {
+            "apiKeyQuery": []
+        }
+    ],
+    "tags": [
+        {
+            "name": "Biblioteca"
+        },
+        {
+            "name": "Compra"
+        },
+        {
+            "name": "Jogo"
+        },
+        {
+            "name": "Promocao"
+        }
+    ]
+}

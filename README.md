@@ -1,243 +1,213 @@
-# FiapGames.InfraOrchestrator
+# FIAP Cloud Games - Infrastructure Orchestrator
 
-## Arquitetura Azure atual
+Central guide for the FCG platform. This repository provisions the shared Azure infrastructure, documents the deployment order and provides the local development environment.
 
-Este repositorio provisiona a base de producao do FCG com Terraform:
+## Architecture
 
-- Azure API Management `apim-fiapgames-prod` como unica entrada externa;
-- rotas `/users`, `/catalog` e `/payment`;
-- validacao JWT RS256 por OpenID/JWKS e rate limit no gateway;
-- Container Apps restritos ao IP publico do APIM;
-- Azure Container Registry Basic;
-- Azure Key Vault com RBAC e identidade gerenciada;
-- quatro bancos Azure SQL Basic, um por servico;
-- RabbitMQ interno com uma replica;
-- Log Analytics com quota diaria de `0.1 GB`;
-- Container Apps Environment compartilhado.
+| Area | Technology | Responsibility |
+| --- | --- | --- |
+| Runtime | .NET 10, Azure Container Apps | Auth, Catalog and Payment APIs |
+| Gateway | Azure API Management Developer | Only public entry point, routing, CORS, JWT validation and rate limiting |
+| Serverless | Azure Functions .NET isolated | Authentication and payment notifications |
+| Messaging | RabbitMQ and Azure Service Bus | API messaging and serverless notification triggers |
+| Data | Azure SQL | One database per service |
+| Security | Key Vault, Managed Identity, RSA/JWKS | Secrets and asymmetric JWT signing/validation |
+| Images | Azure Container Registry Basic | Versioned service images |
+| Observability | Log Analytics and Application Insights | Centralized platform and Function logs |
+| IaC and CI/CD | Terraform and GitHub Actions | Repeatable provisioning, migrations and deployments |
 
-Gateway publico:
+Production request flow:
 
 ```text
-https://apim-fiapgames-prod.azure-api.net
+Client -> API Management -> Auth / Catalog / Payment Container Apps
+                              |
+                              +-> RabbitMQ
+Auth / Payment -> Service Bus queues -> Notification Azure Functions -> Azure SQL
 ```
 
-Antes de executar Terraform, copie `terraform.tfvars.example` para `terraform.tfvars` e preencha os valores sensiveis. O arquivo real e ignorado pelo Git. Use `configure_apim_apis = true` somente depois que Auth, Catalog e Payment existirem e responderem ao Swagger.
+The Container Apps reject direct Internet traffic through IP restrictions. Clients must use:
+
+```text
+https://apim-fiapgames-prod-64f434dd-v2.azure-api.net
+```
+
+## Repository layout
+
+```text
+main.tf                         Shared Azure infrastructure
+terraform.tfvars.example       Safe Terraform variable template
+policies/                       APIM policies and OpenAPI contracts
+postman/                        Current gateway test collection
+scripts/generate-jwt-keys.ps1   RSA key generation
+scripts/run-migration-job.ps1   Manual ephemeral migration job
+scripts/suspend-environment.ps1 Cost-saving shutdown
+scripts/resume-environment.ps1  Environment startup
+docker-compose.yml              Local Auth/Catalog/Payment environment
+```
+
+The serverless Notification infrastructure intentionally lives in the `FiapGames.Notification/infra` directory of its own repository. Kubernetes manifests and the old continuously running notification worker are no longer part of the supported architecture.
+
+## Prerequisites
+
+- Azure CLI authenticated with access to the target subscription
+- Terraform `~> 3.90` (the current workstation uses `C:\terraform\terraform.exe`)
+- Docker Desktop for local execution
+- .NET 10 SDK for service development
+- OpenSSL to generate the JWT signing key
+- Azure Functions Core Tools for local Notification execution
+
+Register the required Azure resource providers once per subscription:
+
+```powershell
+az provider register --namespace Microsoft.App
+az provider register --namespace Microsoft.ContainerRegistry
+az provider register --namespace Microsoft.KeyVault
+az provider register --namespace Microsoft.Sql
+az provider register --namespace Microsoft.ApiManagement
+az provider register --namespace Microsoft.ServiceBus
+az provider register --namespace Microsoft.Web
+```
+
+Wait until each provider reports `Registered` before applying Terraform.
+
+## Provision the shared environment
+
+1. Select the intended subscription.
+
+```powershell
+az login
+az account set --subscription "<subscription-id>"
+az account show --query "{name:name,id:id,tenantId:tenantId}" --output table
+```
+
+2. Create a local variables file. It is ignored by Git.
+
+```powershell
+Copy-Item terraform.tfvars.example terraform.tfvars
+```
+
+Set strong values for the SQL and RabbitMQ credentials and valid APIM publisher data. Do not commit this file.
+
+3. Initialize and validate Terraform.
 
 ```powershell
 C:\terraform\terraform.exe init
-C:\terraform\terraform.exe plan -var-file=terraform.tfvars -out=production.tfplan
-C:\terraform\terraform.exe apply production.tfplan
+C:\terraform\terraform.exe fmt -check
+C:\terraform\terraform.exe validate
+C:\terraform\terraform.exe plan -out local.tfplan
 ```
 
-Testes esperados: JWKS via `/users/.well-known/jwks` retorna `200`, Catalog sem token retorna `401` e qualquer acesso direto aos FQDNs das APIs retorna `403`.
-
-Repositório responsável por orquestrar os serviços locais do workspace FiapGames.
-
-## Objetivo
-
-- Subir a infraestrutura comum de mensageria e bancos
-- Iniciar os serviços existentes com base em uma árvore local fixa
-- Permitir bootstrap automático via script a partir de `C:\git\FiapGames_MS`
-
-## Como usar
-
-No Windows:
+4. Review the plan and apply it.
 
 ```powershell
-cd c:\git\FiapGames_MS\FiapGames.InfraOrchestrator
-./bootstrap.ps1
+C:\terraform\terraform.exe apply local.tfplan
 ```
 
-No Linux/macOS:
+The shared stack creates resource group `rg-fiapgames-prod`, ACR, Key Vault, user-assigned managed identity, Azure SQL databases, Log Analytics, Container Apps Environment, RabbitMQ and APIM. Terraform outputs the gateway URL, Key Vault URI, ACR login server and identity identifiers.
 
-```bash
-cd /c/git/FiapGames_MS/FiapGames.InfraOrchestrator
-./bootstrap.sh
-```
-
-## O que está incluído
-
-- `docker-compose.yml` com RabbitMQ, SQL Server e os serviços:
-  - AuthService
-  - PaymentService
-  - Catalog
-  - Notification
-- `bootstrap.ps1` para validação do workspace e deploy
-- `bootstrap.sh` equivalente para ambientes Unix
-
-## Observações
-
-- Os repositórios devem existir previamente em `C:\git\FiapGames_MS`:
-  - `FiapGame.AuthService`
-  - `FiapGame.PaymentService`
-  - `FiapGames.Catalog`
-  - `FiapGames.Notification`
-- O bootstrap não faz clone nem pull; ele só valida a árvore local e sobe a stack.
-
-## Persistência poliglota e cache
-
-A arquitetura foi evoluída para combinar o melhor de cada tipo de armazenamento:
-
-- SQL Server continua como fonte da verdade para Auth, Catalog e Payment.
-- Redis foi adicionado ao Catalog para cache de leitura quente de jogos, promoções e biblioteca do usuário.
-- Cosmos DB com API MongoDB foi preparado para o Notification para armazenar histórico de notificações e eventos.
-
-Configuração esperada nos appsettings:
-
-```json
-{
-  "Redis": { "ConnectionString": "<redis-host>:6380,password=<senha>,ssl=True,abortConnect=False" },
-  "MongoDb": {
-    "ConnectionString": "mongodb://<cosmos-account>.mongo.cosmos.azure.com:10255/?ssl=true&replicaSet=globaldb&retrywrites=false&maxIdleTimeMS=120000&appName=@<nome>",
-    "DatabaseName": "fiapgames_notifications",
-    "CollectionName": "HistoricoNotificacoes"
-  }
-}
-```
-
-## Observabilidade
-
-A stack escolhida para a Fase 3 e Prometheus + Grafana, hospedados no mesmo
-Azure Container Apps Environment para reduzir custo operacional. Os APIs Auth,
-Catalog e Payment expoem metricas HTTP em `/metrics`; o Prometheus coleta essas
-rotas pelo APIM, mantendo o gateway como unica entrada externa. O Grafana usa
-o Prometheus como datasource e provisiona o dashboard `FIAP Games - API
-Overview` automaticamente.
-
-Metricas principais:
-
-- requests por segundo por API;
-- percentual de respostas HTTP 5xx;
-- latencia P95;
-- total de requests no periodo selecionado.
-
-Os endpoints de negocio continuam protegidos por JWT. Apenas `GET /metrics`
-fica liberado na politica do APIM para permitir o scrape interno; os Container
-Apps continuam restritos ao IP do gateway.
-
-A Notification nao e um quarto API: sua migracao para Azure Function foi
-concluida no repositorio `FiapGames.Notification`. A Function usa Service Bus
-triggers e envia logs para Application Insights conectado ao Log Analytics
-compartilhado, com `FunctionName` e `InvocationId` para correlacao de cada
-execucao.
-
-Depois do apply do Terraform, a URL do Grafana e exibida no output
-`grafana_url`. O usuario padrao e `admin`; a senha vem de
-`grafana_admin_password` ou, quando omitida, da senha do RabbitMQ. Em producao,
-defina `grafana_admin_password` explicitamente em um arquivo de variaveis fora
-do Git.
-
-## Variáveis de ambiente (Docker Compose)
-
-O `docker-compose.yml` foi parametrizado para evitar segredos fixos em arquivo.
-
-Principais variáveis:
-
-- `SQLSERVER_SA_PASSWORD`
-- `RABBITMQ_DEFAULT_USER`
-- `RABBITMQ_DEFAULT_PASS`
-- `RABBITMQ_USERNAME`
-- `RABBITMQ_PASSWORD`
-- `JWT_KEY`
-- `JWT_ISSUER`
-- `JWT_AUDIENCE`
-- `AUTH_CONNECTION_STRING`
-- `PAYMENT_CONNECTION_STRING`
-- `CATALOG_CONNECTION_STRING`
-- `NOTIFICATION_CONNECTION_STRING`
-
-## Fluxo Kubernetes (manifests agregados)
-
-Em `k8s/`, os serviços de API/worker usam `ConfigMap` para não sensíveis e `Secret` para sensíveis.
-
-Arquivos adicionados para padronização:
-
-- `auth-api-configmap.yaml` e `auth-api-secret.yaml`
-- `catalog-api-configmap.yaml` e `catalog-api-secret.yaml`
-- `payment-api-configmap.yaml` e `payment-api-secret.yaml`
-- `notification-worker-configmap.yaml` e `notification-worker-secret.yaml`
-- `rabbitmq-configmap.yaml` e `rabbitmq-secret.yaml`
-- `sqlserver-configmap.yaml` e `sqlserver-secret.yaml`
-
-Ordem sugerida para apply (quando for executar em cluster):
-
-1. ConfigMaps e Secrets
-2. RabbitMQ e SQL Server
-3. APIs e worker de notificação
-
-## Checklist de execução limpa (final)
-
-### 1) Preparar variáveis locais
-
-Use `.env.example` como base:
+5. Generate and upload the RSA private key.
 
 ```powershell
-cp .env.example .env
+.\scripts\generate-jwt-keys.ps1
+az keyvault secret set `
+  --vault-name kv-fiapgames-64f434dd `
+  --name Jwt--PrivateKey `
+  --file jwt-private.pem
 ```
 
-Defina valores reais para:
+The PEM files are ignored by Git. Never commit or print the private key.
 
-- `SQLSERVER_SA_PASSWORD`
-- `RABBITMQ_DEFAULT_USER`
-- `RABBITMQ_DEFAULT_PASS`
-- `RABBITMQ_USERNAME`
-- `RABBITMQ_PASSWORD`
-- `JWT_KEY`
-- `JWT_ISSUER`
-- `JWT_AUDIENCE`
-- `AUTH_CONNECTION_STRING`
-- `PAYMENT_CONNECTION_STRING`
-- `CATALOG_CONNECTION_STRING`
-- `NOTIFICATION_CONNECTION_STRING`
-
-Os scripts `apply-secrets.ps1` e `run-clean-validation.ps1` carregam `.env` automaticamente a partir da raiz deste repositório.
-
-### 2) Docker limpo
-
-No diretório deste repositório:
+6. Provision the serverless Notification resources from its repository.
 
 ```powershell
-docker compose down -v --remove-orphans
+Set-Location ..\FiapGames.Notification\infra
+C:\terraform\terraform.exe init
+C:\terraform\terraform.exe validate
+C:\terraform\terraform.exe plan -out local.tfplan
+C:\terraform\terraform.exe apply local.tfplan
+```
+
+That stack creates Azure Service Bus queues, Function App, Storage, Application Insights and the required RBAC assignments.
+
+## Deploy the applications
+
+Each application repository owns its workflow:
+
+| Repository | Production branch | Workload |
+| --- | --- | --- |
+| `FiapGame.AuthService` | `main` | `ca-auth-api` |
+| `FiapGames.Catalog` | `master` | `ca-catalog-api` |
+| `FiapGame.PaymentService` | `main` | `ca-payment-api` |
+| `FiapGames.Notification` | `master` | `func-fcg-notify-64f434dd` |
+
+For the APIs, a push builds and pushes an image tagged with the commit SHA, executes an ephemeral Container Apps Job with `--migrate`, and updates the Container App only after a successful migration. Notification applies its own Terraform, migrates its database and performs a Function ZIP deployment.
+
+Configure the repository secrets and variables listed in [CONFIG_SECRET_MATRIX.md](CONFIG_SECRET_MATRIX.md) before the first run. The deployment service principal should have only the roles and resource-group scope required by the workflows.
+
+## Local development
+
+The supported local Compose profile runs SQL Server, RabbitMQ, Auth, Catalog and Payment. Notification is serverless and should be started separately with Azure Functions Core Tools.
+
+```powershell
+Copy-Item .env.example .env
+.\scripts\generate-jwt-keys.ps1
+docker compose config --quiet
 docker compose up -d --build
 docker compose ps
-docker compose logs --tail=200
 ```
 
-Ou execute em modo automatizado:
+Local endpoints:
+
+| Service | URL |
+| --- | --- |
+| Auth | `http://localhost:8081` |
+| Catalog | `http://localhost:8082` |
+| Payment | `http://localhost:8083` |
+| RabbitMQ management | `http://localhost:15672` |
+
+Stop the local stack with `docker compose down`. Add `-v` only when intentionally discarding local database data.
+
+## Validation
+
+Import [FCG-Azure.postman_collection.json](postman/FCG-Azure.postman_collection.json) in Postman. Execute the login request first; it stores the JWT for the protected Catalog and Payment calls.
+
+Expected security checks:
+
+- APIM login returns a JWT signed with RS256.
+- The JWKS endpoint publishes only the RSA public key.
+- Protected requests without a token return `401`.
+- Protected requests with the login token reach the correct API.
+- Direct Container App access returns `403` because only APIM is allowed.
+- A published authentication or payment event triggers the corresponding Azure Function.
+- Application Insights shows the Function invocation and persistence logs.
+
+Useful health endpoints behind each service are `/health/live` and `/health/ready`.
+
+## Cost control
+
+The environment can be suspended without deleting resources:
 
 ```powershell
-./scripts/run-clean-validation.ps1 -Mode docker -Clean
+.\scripts\suspend-environment.ps1
 ```
 
-Critério: serviços estáveis, sem loop de erro de conexão com SQL ou RabbitMQ.
-
-### 3) Kubernetes limpo
-
-Aplicar primeiro ConfigMaps/Secrets e depois Deployments/Services:
+Resume it before demos or integration tests:
 
 ```powershell
-kubectl apply -f k8s/*configmap.yaml
-./scripts/apply-secrets.ps1
-kubectl apply -f k8s/*deployment.yaml
-kubectl apply -f k8s/*service.yaml
-kubectl get pods,svc
+.\scripts\resume-environment.ps1
 ```
 
-Ou execute em modo automatizado:
+The scripts scale/deactivate Container Apps, stop/start the Function and change SQL databases between provisioned Basic and serverless auto-pause modes. APIM Developer, ACR, Key Vault, Storage and Log Analytics remain provisioned and can still generate residual cost. Do not run `terraform apply` while intentionally suspended, because Terraform may restore the declared running state.
+
+## Repository hygiene
+
+Generated plans, Terraform state, provider caches, `.env`, PEM keys and build output must remain untracked. Before delivery:
 
 ```powershell
-./scripts/run-clean-validation.ps1 -Mode k8s -Clean
+git status --short
+git ls-files | Select-String -Pattern '\.(pem|tfstate|tfplan)$'
+C:\terraform\terraform.exe fmt -check main.tf
+C:\terraform\terraform.exe validate
 ```
 
-Critério: pods `Ready` e sem reinícios inesperados.
-
-### 4) Smoke ponta a ponta
-
-Fluxo mínimo:
-
-1. Gerar token no Auth
-2. Criar compra no Catalog
-3. Confirmar processamento no Payment
-4. Confirmar consumo no Notification
-
-Critério: mesmo `RastreioId/CorrelationId` observável nos logs dos serviços envolvidos.
+`git status --short` must return no output after the intended changes are committed.
