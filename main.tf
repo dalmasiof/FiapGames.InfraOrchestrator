@@ -99,6 +99,18 @@ variable "log_analytics_daily_quota_gb" {
   }
 }
 
+variable "grafana_admin_password" {
+  description = "Administrator password for the self-hosted Grafana Container App. Defaults to the RabbitMQ password when omitted."
+  type        = string
+  sensitive   = true
+  default     = null
+
+  validation {
+    condition     = var.grafana_admin_password == null || length(var.grafana_admin_password) >= 16
+    error_message = "The Grafana administrator password must contain at least 16 characters when provided."
+  }
+}
+
 data "azurerm_client_config" "current" {}
 
 data "azurerm_container_app" "auth" {
@@ -128,9 +140,18 @@ data "azurerm_container_app" "payment" {
   depends_on = [azurerm_resource_group.main]
 }
 
+data "azurerm_container_app" "rabbitmq" {
+  name                = "ca-rabbitmq-prod"
+  resource_group_name = local.resource_group_name
+
+  depends_on = [azurerm_resource_group.main]
+}
+
 locals {
   resource_group_name = "rg-fiapgames-prod"
   unique_suffix       = substr(replace(data.azurerm_client_config.current.subscription_id, "-", ""), 0, 8)
+  redis_name          = "redis-fiapgames-prod"
+  cosmos_name         = "cosmos-fiapgames-prod"
 
   database_names = toset([
     "fiapgames_auth",
@@ -144,6 +165,9 @@ locals {
     environment = "production"
     managed_by  = "terraform"
   }
+
+  grafana_password = coalesce(var.grafana_admin_password, var.rabbitmq_default_password)
+  api_gateway_host = replace(replace(azurerm_api_management.main.gateway_url, "https://", ""), "http://", "")
 }
 
 resource "azurerm_resource_group" "main" {
@@ -220,7 +244,7 @@ resource "azurerm_key_vault_secret" "application" {
   depends_on = [azurerm_role_assignment.current_user_key_vault_secrets_officer]
 
   lifecycle {
-    ignore_changes = [value]
+    ignore_changes = all
   }
 }
 
@@ -267,6 +291,47 @@ resource "azurerm_mssql_database" "services" {
   tags           = local.common_tags
 }
 
+resource "azurerm_redis_cache" "catalog_cache" {
+  name                          = local.redis_name
+  location                      = azurerm_resource_group.main.location
+  resource_group_name           = azurerm_resource_group.main.name
+  capacity                      = 0
+  family                        = "C"
+  sku_name                      = "Basic"
+  minimum_tls_version           = "1.2"
+  public_network_access_enabled = true
+  tags                          = local.common_tags
+
+  lifecycle {
+    ignore_changes = all
+  }
+}
+
+resource "azurerm_cosmosdb_account" "notification_history" {
+  name                = local.cosmos_name
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  offer_type          = "Standard"
+  kind                = "MongoDB"
+  tags                = local.common_tags
+
+  automatic_failover_enabled = false
+
+  consistency_policy {
+    consistency_level = "Session"
+  }
+
+  geo_location {
+    location          = azurerm_resource_group.main.location
+    failover_priority = 0
+    zone_redundant    = false
+  }
+
+  lifecycle {
+    ignore_changes = [capabilities]
+  }
+}
+
 resource "azurerm_log_analytics_workspace" "main" {
   name                = "log-fiapgames-prod-${local.unique_suffix}"
   location            = azurerm_resource_group.main.location
@@ -284,6 +349,9 @@ resource "azurerm_container_app_environment" "main" {
   log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
   tags                       = local.common_tags
 
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 resource "azurerm_api_management" "main" {
@@ -359,6 +427,42 @@ resource "azurerm_api_management_api" "payment" {
     content_format = "openapi+json"
     content_value  = file("${path.module}/policies/fiapgames-payment_openapi+json.json")
   }
+}
+
+resource "azurerm_api_management_api_operation" "auth_metrics" {
+  count = var.configure_apim_apis ? 1 : 0
+
+  operation_id        = "auth-metrics"
+  api_name            = azurerm_api_management_api.auth[0].name
+  api_management_name = azurerm_api_management.main.name
+  resource_group_name = azurerm_resource_group.main.name
+  display_name        = "Auth metrics"
+  method              = "GET"
+  url_template        = "/metrics"
+}
+
+resource "azurerm_api_management_api_operation" "catalog_metrics" {
+  count = var.configure_apim_apis ? 1 : 0
+
+  operation_id        = "catalog-metrics"
+  api_name            = azurerm_api_management_api.catalog[0].name
+  api_management_name = azurerm_api_management.main.name
+  resource_group_name = azurerm_resource_group.main.name
+  display_name        = "Catalog metrics"
+  method              = "GET"
+  url_template        = "/metrics"
+}
+
+resource "azurerm_api_management_api_operation" "payment_metrics" {
+  count = var.configure_apim_apis ? 1 : 0
+
+  operation_id        = "payment-metrics"
+  api_name            = azurerm_api_management_api.payment[0].name
+  api_management_name = azurerm_api_management.main.name
+  resource_group_name = azurerm_resource_group.main.name
+  display_name        = "Payment metrics"
+  method              = "GET"
+  url_template        = "/metrics"
 }
 
 resource "azurerm_api_management_policy" "global" {
@@ -439,22 +543,72 @@ resource "terraform_data" "api_ingress_apim_only" {
   ]
 }
 
-resource "azurerm_container_app" "rabbitmq" {
-  name                         = "ca-rabbitmq-prod"
+resource "azurerm_container_app" "prometheus" {
+  name                         = "ca-prometheus-prod"
   container_app_environment_id = azurerm_container_app_environment.main.id
   resource_group_name          = azurerm_resource_group.main.name
   revision_mode                = "Single"
   workload_profile_name        = "Consumption"
   tags                         = local.common_tags
 
-  secret {
-    name  = "rabbitmq-default-user"
-    value = var.rabbitmq_default_user
+  template {
+    min_replicas = 1
+    max_replicas = 1
+
+    container {
+      name   = "prometheus"
+      image  = "prom/prometheus:v2.55.1"
+      cpu    = 0.25
+      memory = "0.5Gi"
+
+      command = ["/bin/sh", "-c"]
+      args = [
+        <<-EOT
+        cat > /etc/prometheus/prometheus.yml <<'EOF'
+        global:
+          scrape_interval: 15s
+        scrape_configs:
+          - job_name: fiapgames-auth
+            metrics_path: /users/metrics
+            static_configs:
+              - targets: ['${local.api_gateway_host}']
+          - job_name: fiapgames-catalog
+            metrics_path: /catalog/metrics
+            static_configs:
+              - targets: ['${local.api_gateway_host}']
+          - job_name: fiapgames-payment
+            metrics_path: /payment/metrics
+            static_configs:
+              - targets: ['${local.api_gateway_host}']
+        EOF
+        exec /bin/prometheus --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus
+        EOT
+      ]
+    }
   }
 
+  ingress {
+    external_enabled = false
+    target_port      = 9090
+    transport        = "http"
+
+    traffic_weight {
+      percentage      = 100
+      latest_revision = true
+    }
+  }
+}
+
+resource "azurerm_container_app" "grafana" {
+  name                         = "ca-grafana-prod"
+  container_app_environment_id = azurerm_container_app_environment.main.id
+  resource_group_name          = azurerm_resource_group.main.name
+  revision_mode                = "Single"
+  tags                         = local.common_tags
+
   secret {
-    name  = "rabbitmq-default-password"
-    value = var.rabbitmq_default_password
+    name  = "grafana-admin-password"
+    value = local.grafana_password
   }
 
   template {
@@ -462,44 +616,88 @@ resource "azurerm_container_app" "rabbitmq" {
     max_replicas = 1
 
     container {
-      name   = "rabbitmq"
-      image  = "rabbitmq:3-management"
-      cpu    = 0.5
-      memory = "1Gi"
+      name   = "grafana"
+      image  = "grafana/grafana:11.3.0"
+      cpu    = 0.25
+      memory = "0.5Gi"
 
       env {
-        name        = "RABBITMQ_DEFAULT_USER"
-        secret_name = "rabbitmq-default-user"
+        name  = "GF_SECURITY_ADMIN_USER"
+        value = "admin"
       }
 
       env {
-        name        = "RABBITMQ_DEFAULT_PASS"
-        secret_name = "rabbitmq-default-password"
+        name        = "GF_SECURITY_ADMIN_PASSWORD"
+        secret_name = "grafana-admin-password"
       }
 
-      startup_probe {
-        transport               = "TCP"
-        port                    = 5672
-        interval_seconds        = 5
-        timeout                 = 3
-        failure_count_threshold = 10
+      env {
+        name  = "GF_AUTH_ANONYMOUS_ENABLED"
+        value = "false"
       }
 
-      liveness_probe {
-        transport               = "TCP"
-        port                    = 5672
-        interval_seconds        = 10
-        timeout                 = 3
-        failure_count_threshold = 3
+      env {
+        name  = "GF_DATASOURCES_DEFAULT_NAME"
+        value = "Prometheus"
       }
+
+      env {
+        name  = "GF_DATASOURCES_DEFAULT_TYPE"
+        value = "prometheus"
+      }
+
+      env {
+        name  = "GF_DATASOURCES_DEFAULT_URL"
+        value = "http://ca-prometheus:9090"
+      }
+
+      command = ["/bin/sh", "-c"]
+      args = [
+        <<-EOT
+        mkdir -p /etc/grafana/provisioning/datasources /etc/grafana/provisioning/dashboards /var/lib/grafana/dashboards
+        cat > /etc/grafana/provisioning/datasources/prometheus.yaml <<'EOF'
+        apiVersion: 1
+        datasources:
+          - name: Prometheus
+            type: prometheus
+            access: proxy
+            url: http://ca-prometheus:9090
+            isDefault: true
+        EOF
+        cat > /etc/grafana/provisioning/dashboards/default.yaml <<'EOF'
+        apiVersion: 1
+        providers:
+          - name: FIAP Games
+            folder: FIAP Games
+            type: file
+            options:
+              path: /var/lib/grafana/dashboards
+        EOF
+        cat > /var/lib/grafana/dashboards/fiapgames-overview.json <<'EOF'
+        {
+          "uid": "fiapgames-overview",
+          "title": "FIAP Games - API Overview",
+          "schemaVersion": 39,
+          "refresh": "15s",
+          "time": {"from": "now-30m", "to": "now"},
+          "panels": [
+            {"type":"timeseries","title":"Requests per second","gridPos":{"h":8,"w":12,"x":0,"y":0},"targets":[{"expr":"sum by (job) (rate(http_requests_received_total[5m]))","legendFormat":"{{job}}"}]},
+            {"type":"timeseries","title":"HTTP error rate","gridPos":{"h":8,"w":12,"x":12,"y":0},"targets":[{"expr":"sum(rate(http_requests_received_total{code=~\"5..\"}[5m])) / sum(rate(http_requests_received_total[5m]))","legendFormat":"5xx"}]},
+            {"type":"timeseries","title":"P95 request duration","gridPos":{"h":8,"w":12,"x":0,"y":8},"targets":[{"expr":"histogram_quantile(0.95, sum by (le, job) (rate(http_request_duration_seconds_bucket[5m])))","legendFormat":"{{job}}"}]},
+            {"type":"stat","title":"Total requests (5m)","gridPos":{"h":8,"w":12,"x":12,"y":8},"targets":[{"expr":"sum(increase(http_requests_received_total[5m]))","legendFormat":"requests"}]}
+          ]
+        }
+        EOF
+        exec /run.sh
+        EOT
+      ]
     }
   }
 
   ingress {
-    external_enabled = false
-    target_port      = 5672
-    exposed_port     = 5672
-    transport        = "tcp"
+    external_enabled = true
+    target_port      = 3000
+    transport        = "http"
 
     traffic_weight {
       percentage      = 100
@@ -512,7 +710,7 @@ resource "azurerm_container_app" "rabbitmq" {
 # RabbitMQ's management port to the same internal-only Container App ingress.
 resource "azapi_update_resource" "rabbitmq_management_port" {
   type        = "Microsoft.App/containerApps@2025-07-01"
-  resource_id = azurerm_container_app.rabbitmq.id
+  resource_id = data.azurerm_container_app.rabbitmq.id
 
   body = jsonencode({
     properties = {

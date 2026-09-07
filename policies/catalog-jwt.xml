@@ -1,7 +1,11 @@
 <policies>
   <inbound>
     <base />
-    <validate-jwt header-name="Authorization"
+    <choose>
+      <when condition="@(context.Request.Method == &quot;GET&quot; &amp;&amp; context.Request.Url.Path.EndsWith(&quot;/metrics&quot;, StringComparison.OrdinalIgnoreCase))">
+      </when>
+      <otherwise>
+        <validate-jwt header-name="Authorization"
                   failed-validation-httpcode="401"
                   failed-validation-error-message="Unauthorized"
                   require-expiration-time="true"
@@ -14,7 +18,9 @@
       <issuers>
         <issuer>FiapGamesApi</issuer>
       </issuers>
-    </validate-jwt>
+        </validate-jwt>
+      </otherwise>
+    </choose>
     <rate-limit-by-key calls="30"
                        renewal-period="60"
                        counter-key="@(context.Request.IpAddress)" />
