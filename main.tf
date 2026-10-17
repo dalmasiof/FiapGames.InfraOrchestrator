@@ -88,6 +88,18 @@ variable "configure_apim_apis" {
   default     = false
 }
 
+variable "enable_aks" {
+  description = "Creates the single-node, Free-tier AKS profile required for the Fase 4 demo."
+  type        = bool
+  default     = false
+}
+
+variable "aks_node_vm_size" {
+  description = "AKS demo node VM size; validate regional quota and current price before apply."
+  type        = string
+  default     = "Standard_B2s"
+}
+
 variable "log_analytics_daily_quota_gb" {
   description = "Daily Log Analytics ingestion cap for the economical environment."
   type        = number
@@ -151,7 +163,7 @@ locals {
   resource_group_name = "rg-fiapgames-prod"
   unique_suffix       = substr(replace(data.azurerm_client_config.current.subscription_id, "-", ""), 0, 8)
   redis_name          = "redis-fiapgames-prod"
-  cosmos_name         = "cosmos-fiapgames-prod"
+  cosmos_name         = "cosmos-fiapgames-prod-${local.unique_suffix}"
 
   database_names = toset([
     "fiapgames_auth",
@@ -222,7 +234,11 @@ locals {
     "ConnectionStrings--CatalogConnection"      = "Server=tcp:${azurerm_mssql_server.main.fully_qualified_domain_name},1433;Initial Catalog=fiapgames_catalog;User ID=${var.sql_admin_login};Password=${var.sql_admin_password};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
     "ConnectionStrings--NotificationConnection" = "Server=tcp:${azurerm_mssql_server.main.fully_qualified_domain_name},1433;Initial Catalog=fiapgames_notification;User ID=${var.sql_admin_login};Password=${var.sql_admin_password};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
     "ConnectionStrings--PaymentConnection"      = "Server=tcp:${azurerm_mssql_server.main.fully_qualified_domain_name},1433;Initial Catalog=fiapgames_payment;User ID=${var.sql_admin_login};Password=${var.sql_admin_password};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
-    "RabbitMq--HostName"                        = azurerm_container_app.rabbitmq.name
+    "Jwt--Authority"                            = "http://ca-auth-api"
+    "MongoDb--ConnectionString"                 = azurerm_cosmosdb_account.notification_history.connection_strings[0]
+    "MongoDb--DatabaseName"                     = "fiapgames_notifications"
+    "Redis--ConnectionString"                   = "${azurerm_redis_cache.catalog_cache.hostname}:${azurerm_redis_cache.catalog_cache.ssl_port},password=${azurerm_redis_cache.catalog_cache.primary_access_key},ssl=True,abortConnect=False"
+    "RabbitMq--HostName"                        = data.azurerm_container_app.rabbitmq.name
     "RabbitMq--Port"                            = "5672"
     "RabbitMq--UserName"                        = var.rabbitmq_default_user
     "RabbitMq--Password"                        = var.rabbitmq_default_password
@@ -352,6 +368,66 @@ resource "azurerm_container_app_environment" "main" {
   lifecycle {
     ignore_changes = all
   }
+}
+
+resource "azurerm_kubernetes_cluster" "fcg" {
+  count               = var.enable_aks ? 1 : 0
+  name                = "aks-fiapgames-prod"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  dns_prefix          = "aks-fiapgames-${local.unique_suffix}"
+  sku_tier            = "Free"
+
+  automatic_channel_upgrade = "patch"
+  oidc_issuer_enabled       = true
+  workload_identity_enabled = true
+
+  default_node_pool {
+    name                        = "system"
+    node_count                  = 1
+    vm_size                     = var.aks_node_vm_size
+    os_disk_size_gb             = 64
+    temporary_name_for_rotation = "systemtmp"
+  }
+
+  identity {
+    type = "SystemAssigned"
+  }
+
+  network_profile {
+    network_plugin    = "azure"
+    load_balancer_sku = "standard"
+    outbound_type     = "loadBalancer"
+  }
+
+  tags = local.common_tags
+}
+
+resource "azurerm_role_assignment" "aks_acr_pull" {
+  count                = var.enable_aks ? 1 : 0
+  scope                = azurerm_container_registry.main.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_kubernetes_cluster.fcg[0].kubelet_identity[0].object_id
+}
+
+resource "azurerm_federated_identity_credential" "aks_auth_api" {
+  count               = var.enable_aks ? 1 : 0
+  name                = "aks-auth-api"
+  resource_group_name = azurerm_resource_group.main.name
+  parent_id           = azurerm_user_assigned_identity.workloads.id
+  issuer              = azurerm_kubernetes_cluster.fcg[0].oidc_issuer_url
+  subject             = "system:serviceaccount:default:auth-api"
+  audience            = ["api://AzureADTokenExchange"]
+}
+
+resource "azurerm_federated_identity_credential" "aks_catalog_api" {
+  count               = var.enable_aks ? 1 : 0
+  name                = "aks-catalog-api"
+  resource_group_name = azurerm_resource_group.main.name
+  parent_id           = azurerm_user_assigned_identity.workloads.id
+  issuer              = azurerm_kubernetes_cluster.fcg[0].oidc_issuer_url
+  subject             = "system:serviceaccount:default:catalog-api"
+  audience            = ["api://AzureADTokenExchange"]
 }
 
 resource "azurerm_api_management" "main" {
@@ -578,6 +654,8 @@ resource "azurerm_container_app" "prometheus" {
               - targets: ['${local.api_gateway_host}']
           - job_name: fiapgames-payment
             metrics_path: /payment/metrics
+            scrape_interval: 30s
+            scrape_timeout: 25s
             static_configs:
               - targets: ['${local.api_gateway_host}']
         EOF
@@ -684,7 +762,9 @@ resource "azurerm_container_app" "grafana" {
             {"type":"timeseries","title":"Requests per second","gridPos":{"h":8,"w":12,"x":0,"y":0},"targets":[{"expr":"sum by (job) (rate(http_requests_received_total[5m]))","legendFormat":"{{job}}"}]},
             {"type":"timeseries","title":"HTTP error rate","gridPos":{"h":8,"w":12,"x":12,"y":0},"targets":[{"expr":"sum(rate(http_requests_received_total{code=~\"5..\"}[5m])) / sum(rate(http_requests_received_total[5m]))","legendFormat":"5xx"}]},
             {"type":"timeseries","title":"P95 request duration","gridPos":{"h":8,"w":12,"x":0,"y":8},"targets":[{"expr":"histogram_quantile(0.95, sum by (le, job) (rate(http_request_duration_seconds_bucket[5m])))","legendFormat":"{{job}}"}]},
-            {"type":"stat","title":"Total requests (5m)","gridPos":{"h":8,"w":12,"x":12,"y":8},"targets":[{"expr":"sum(increase(http_requests_received_total[5m]))","legendFormat":"requests"}]}
+            {"type":"stat","title":"Total requests (5m)","gridPos":{"h":8,"w":12,"x":12,"y":8},"targets":[{"expr":"sum(increase(http_requests_received_total[5m]))","legendFormat":"requests"}]},
+            {"type":"timeseries","title":"Compras sendo feitas","gridPos":{"h":8,"w":12,"x":0,"y":16},"targets":[{"expr":"sum(rate(http_requests_received_total{job=\"fiapgames-catalog\",controller=\"Compra\",action=\"Criar\"}[5m]))","legendFormat":"compras/s"}]},
+            {"type":"timeseries","title":"Mensagens sendo enviadas","gridPos":{"h":8,"w":12,"x":12,"y":16},"targets":[{"expr":"sum by (routing_key) (rate(fiapgames_messages_published_total[5m]))","legendFormat":"{{routing_key}}"}]}
           ]
         }
         EOF

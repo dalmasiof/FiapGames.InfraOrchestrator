@@ -6,7 +6,8 @@ Central guide for the FCG platform. This repository provisions the shared Azure 
 
 | Area | Technology | Responsibility |
 | --- | --- | --- |
-| Runtime | .NET 10, Azure Container Apps | Auth, Catalog and Payment APIs |
+| Runtime atual | .NET 10, Azure Container Apps | Auth, Catalog and Payment APIs em produção |
+| Runtime Fase 4 | AKS Free tier, 1 nó de demonstração | Auth e Catalog preparados para migração; cluster ainda não provisionado |
 | Gateway | Azure API Management Developer | Only public entry point, routing, CORS, JWT validation and rate limiting |
 | Serverless | Azure Functions .NET isolated | Authentication and payment notifications |
 | Messaging | RabbitMQ and Azure Service Bus | API messaging and serverless notification triggers |
@@ -45,7 +46,7 @@ scripts/resume-environment.ps1  Environment startup
 docker-compose.yml              Local Auth/Catalog/Payment environment
 ```
 
-The serverless Notification infrastructure intentionally lives in the `FiapGames.Notification/infra` directory of its own repository. Kubernetes manifests and the old continuously running notification worker are no longer part of the supported architecture.
+The serverless Notification infrastructure intentionally lives in the `FiapGames.Notification/infra` directory of its own repository. Azure Container Apps remains the current production runtime. Terraform and the `k8s/` manifests now define a low-cost AKS demo target for Auth and Catalog; do not apply it until the monthly cost and Elastic Cloud service are approved. The old Kubernetes manifests outside the `auth-api-*` and `catalog-api-*` sets are legacy.
 
 ## Prerequisites
 
@@ -55,6 +56,7 @@ The serverless Notification infrastructure intentionally lives in the `FiapGames
 - .NET 10 SDK for service development
 - OpenSSL to generate the JWT signing key
 - Azure Functions Core Tools for local Notification execution
+- `kubectl` for AKS deployment validation
 
 Register the required Azure resource providers once per subscription:
 
@@ -103,7 +105,9 @@ C:\terraform\terraform.exe plan -out local.tfplan
 C:\terraform\terraform.exe apply local.tfplan
 ```
 
-The shared stack creates resource group `rg-fiapgames-prod`, ACR, Key Vault, user-assigned managed identity, Azure SQL databases, Log Analytics, Container Apps Environment, RabbitMQ and APIM. Terraform outputs the gateway URL, Key Vault URI, ACR login server and identity identifiers.
+The shared stack manages resource group `rg-fiapgames-prod`, ACR, Key Vault, user-assigned managed identity, Azure SQL databases, Log Analytics, Container Apps Environment, RabbitMQ and APIM. Keep `enable_aks = false` in this legacy root: its state contains resources from a disabled subscription and its plan is not safe to apply.
+
+The isolated AKS preflight is in [`aks/README.md`](aks/README.md). It reuses the current resource group, ACR and workload identity without reading or reconciling the legacy state. Its latest local plan is `4 to add, 0 to change, 0 to destroy`. The remote state Storage Account is inaccessible, so the isolated stack has no durable state backend yet. Do not apply until a backend is restored/approved and the node, disk, public IP and persistent-service costs are reviewed; AKS Free tier does not make its node free.
 
 5. Generate and upload the RSA private key.
 
@@ -133,14 +137,16 @@ That stack creates Azure Service Bus queues, Function App, Storage, Application 
 
 Each application repository owns its workflow:
 
-| Repository | Production branch | Workload |
+| Repository | Current Azure workload | Fase 4 deployment |
 | --- | --- | --- |
-| `FiapGame.AuthService` | `main` | `ca-auth-api` |
-| `FiapGames.Catalog` | `master` | `ca-catalog-api` |
-| `FiapGame.PaymentService` | `main` | `ca-payment-api` |
-| `FiapGames.Notification` | `master` | `func-fcg-notify-64f434dd` |
+| `FiapGame.AuthService` (`main`) | `ca-auth-api` | `deploy-aks.yml` on `main` |
+| `FiapGames.Catalog` (`master`) | `ca-catalog-api` | `deploy-aks.yml` on `master`; migration to `main` pending |
+| `FiapGame.PaymentService` (`main`) | `ca-payment-api` | Not in the required Auth/Catalog pipeline scope |
+| `FiapGames.Notification` (`master`) | `func-fcg-notify-64f434dd` | Existing Function workflow |
 
-For the APIs, a push builds and pushes an image tagged with the commit SHA, executes an ephemeral Container Apps Job with `--migrate`, and updates the Container App only after a successful migration. Notification applies its own Terraform, migrates its database and performs a Function ZIP deployment.
+The legacy Auth/Catalog Container Apps workflows are manual-only for rollback. Notification applies its own Terraform, migrates its database and performs a Function ZIP deployment.
+
+The Fase 4 workflows are `deploy-aks.yml` in Auth and Catalog. They run tests, push an immutable SHA tag to ACR, run a Kubernetes migration Job, and wait for a rolling Deployment update. Auth deploys from `main`; Catalog currently deploys from `master` because that is the repository's existing default branch. The ACA workflows are manual-only for rollback. Configure the Auth repository secrets `RABBITMQ_USERNAME` and `RABBITMQ_PASSWORD`; the Auth workflow creates the AKS Secret `rabbitmq-auth` at deployment time.
 
 Configure the repository secrets and variables listed in [CONFIG_SECRET_MATRIX.md](CONFIG_SECRET_MATRIX.md) before the first run. The deployment service principal should have only the roles and resource-group scope required by the workflows.
 
@@ -197,7 +203,7 @@ Resume it before demos or integration tests:
 .\scripts\resume-environment.ps1
 ```
 
-The scripts scale/deactivate Container Apps, stop/start the Function and change SQL databases between provisioned Basic and serverless auto-pause modes. APIM Developer, ACR, Key Vault, Storage and Log Analytics remain provisioned and can still generate residual cost. Do not run `terraform apply` while intentionally suspended, because Terraform may restore the declared running state.
+The scripts scale/deactivate Container Apps, stop/start AKS and the Function, and change SQL databases between provisioned Basic and serverless auto-pause modes. This is the data-preserving mode, not a zero-cost shutdown: APIM Developer, Cosmos DB, Redis, ACR, Key Vault, Storage, Log Analytics, disks and IPs may continue charging. A destructive delete mode is intentionally not provided. Do not run `terraform apply` while intentionally suspended, because Terraform may restore the declared running state.
 
 ## Repository hygiene
 

@@ -7,8 +7,8 @@ services:
       - "5672:5672"
       - "15672:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-guest}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-guest}
+      RABBITMQ_DEFAULT_USER: "${RABBITMQ_DEFAULT_USER:?Set RABBITMQ_DEFAULT_USER}"
+      RABBITMQ_DEFAULT_PASS: "${RABBITMQ_DEFAULT_PASS:?Set RABBITMQ_DEFAULT_PASS}"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
@@ -27,14 +27,14 @@ services:
       - "8081:8081"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__AuthConnection: "${AUTH_CONNECTION_STRING:-Server=sqlserver,1433;Database=fiapgames_auth;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True}"
+      ConnectionStrings__AuthConnection: "${AUTH_CONNECTION_STRING:?Set AUTH_CONNECTION_STRING}"
       Jwt__PrivateKeyFile: "/run/secrets/jwt-private.pem"
       Jwt__Issuer: "${JWT_ISSUER:-FiapGamesApi}"
       Jwt__Audience: "${JWT_AUDIENCE:-FiapGamesClients}"
       RabbitMq__HostName: "rabbitmq"
       RabbitMq__Port: "5672"
-      RabbitMq__UserName: "${RABBITMQ_USERNAME:-guest}"
-      RabbitMq__Password: "${RABBITMQ_PASSWORD:-guest}"
+      RabbitMq__UserName: "${RABBITMQ_USERNAME:?Set RABBITMQ_USERNAME}"
+      RabbitMq__Password: "${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}"
     depends_on:
       auth-migrate:
         condition: service_completed_successfully
@@ -54,13 +54,13 @@ services:
     restart: "no"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__AuthConnection: "${AUTH_CONNECTION_STRING:-Server=sqlserver,1433;Database=fiapgames_auth;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True}"
+      ConnectionStrings__AuthConnection: "${AUTH_CONNECTION_STRING:?Set AUTH_CONNECTION_STRING}"
       Jwt__PrivateKeyFile: "/run/secrets/jwt-private.pem"
       Jwt__Issuer: "${JWT_ISSUER:-FiapGamesApi}"
       Jwt__Audience: "${JWT_AUDIENCE:-FiapGamesClients}"
       RabbitMq__HostName: "rabbitmq"
-      RabbitMq__UserName: "${RABBITMQ_USERNAME:-guest}"
-      RabbitMq__Password: "${RABBITMQ_PASSWORD:-guest}"
+      RabbitMq__UserName: "${RABBITMQ_USERNAME:?Set RABBITMQ_USERNAME}"
+      RabbitMq__Password: "${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}"
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -76,7 +76,7 @@ services:
     restart: always
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "${SQLSERVER_SA_PASSWORD:-YourStrong@Passw0rd}"
+      MSSQL_SA_PASSWORD: "${SQLSERVER_SA_PASSWORD:?Set SQLSERVER_SA_PASSWORD}"
     ports:
       - "1433:1433"
     volumes:
@@ -85,7 +85,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '${SQLSERVER_SA_PASSWORD:-YourStrong@Passw0rd}' -C -Q 'SELECT 1' || exit 1"
+          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '${SQLSERVER_SA_PASSWORD:?Set SQLSERVER_SA_PASSWORD}' -C -Q 'SELECT 1' || exit 1"
         ]
       interval: 10s
       timeout: 5s
@@ -103,14 +103,14 @@ services:
       - "8083:8082"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__PaymentConnection: "${PAYMENT_CONNECTION_STRING:-Server=sqlserver,1433;Database=fiapgames_payment;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False;Connect Timeout=60;ConnectRetryCount=20;ConnectRetryInterval=5}"
-      Jwt__JwksUri: "http://auth-api:8081/.well-known/jwks"
+      ConnectionStrings__PaymentConnection: "${PAYMENT_CONNECTION_STRING:?Set PAYMENT_CONNECTION_STRING}"
+      Jwt__Authority: "http://auth-api:8081"
       Jwt__Issuer: "${JWT_ISSUER:-FiapGamesApi}"
       Jwt__Audience: "${JWT_AUDIENCE:-FiapGamesClients}"
       RabbitMq__HostName: "rabbitmq"
       RabbitMq__Port: "5672"
-      RabbitMq__UserName: "${RABBITMQ_USERNAME:-guest}"
-      RabbitMq__Password: "${RABBITMQ_PASSWORD:-guest}"
+      RabbitMq__UserName: "${RABBITMQ_USERNAME:?Set RABBITMQ_USERNAME}"
+      RabbitMq__Password: "${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}"
     depends_on:
       payment-migrate:
         condition: service_completed_successfully
@@ -129,13 +129,13 @@ services:
     restart: "no"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__PaymentConnection: "${PAYMENT_CONNECTION_STRING:-Server=sqlserver,1433;Database=fiapgames_payment;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False}"
+      ConnectionStrings__PaymentConnection: "${PAYMENT_CONNECTION_STRING:?Set PAYMENT_CONNECTION_STRING}"
       Jwt__JwksUri: "http://auth-api:8081/.well-known/jwks"
       Jwt__Issuer: "${JWT_ISSUER:-FiapGamesApi}"
       Jwt__Audience: "${JWT_AUDIENCE:-FiapGamesClients}"
       RabbitMq__HostName: "rabbitmq"
-      RabbitMq__UserName: "${RABBITMQ_USERNAME:-guest}"
-      RabbitMq__Password: "${RABBITMQ_PASSWORD:-guest}"
+      RabbitMq__UserName: "${RABBITMQ_USERNAME:?Set RABBITMQ_USERNAME}"
+      RabbitMq__Password: "${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}"
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -151,14 +151,14 @@ services:
       - "8082:8082"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__CatalogConnection: "${CATALOG_CONNECTION_STRING:-Server=sqlserver,1433;Database=fiapgames_catalog;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False;Connect Timeout=60;ConnectRetryCount=20;ConnectRetryInterval=5}"
+      ConnectionStrings__CatalogConnection: "${CATALOG_CONNECTION_STRING:?Set CATALOG_CONNECTION_STRING}"
       Jwt__JwksUri: "http://auth-api:8081/.well-known/jwks"
       Jwt__Issuer: "${JWT_ISSUER:-FiapGamesApi}"
       Jwt__Audience: "${JWT_AUDIENCE:-FiapGamesClients}"
       RabbitMq__HostName: "rabbitmq"
       RabbitMq__Port: "5672"
-      RabbitMq__UserName: "${RABBITMQ_USERNAME:-guest}"
-      RabbitMq__Password: "${RABBITMQ_PASSWORD:-guest}"
+      RabbitMq__UserName: "${RABBITMQ_USERNAME:?Set RABBITMQ_USERNAME}"
+      RabbitMq__Password: "${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}"
     depends_on:
       catalog-migrate:
         condition: service_completed_successfully
@@ -177,13 +177,13 @@ services:
     restart: "no"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__CatalogConnection: "${CATALOG_CONNECTION_STRING:-Server=sqlserver,1433;Database=fiapgames_catalog;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False}"
+      ConnectionStrings__CatalogConnection: "${CATALOG_CONNECTION_STRING:?Set CATALOG_CONNECTION_STRING}"
       Jwt__JwksUri: "http://auth-api:8081/.well-known/jwks"
       Jwt__Issuer: "${JWT_ISSUER:-FiapGamesApi}"
       Jwt__Audience: "${JWT_AUDIENCE:-FiapGamesClients}"
       RabbitMq__HostName: "rabbitmq"
-      RabbitMq__UserName: "${RABBITMQ_USERNAME:-guest}"
-      RabbitMq__Password: "${RABBITMQ_PASSWORD:-guest}"
+      RabbitMq__UserName: "${RABBITMQ_USERNAME:?Set RABBITMQ_USERNAME}"
+      RabbitMq__Password: "${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}"
     depends_on:
       sqlserver:
         condition: service_healthy

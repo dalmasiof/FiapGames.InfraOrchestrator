@@ -11,4 +11,6 @@ apim_publisher_name  = "FIAP Cloud Games"
 apim_publisher_email = "cloud@fiapgames.com.br"
 
 configure_apim_apis          = true
+enable_aks                   = false
+aks_node_vm_size             = "Standard_B2s"
 log_analytics_daily_quota_gb = 0.1

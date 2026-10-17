@@ -1,0 +1,7 @@
+subscription_id = "64f434dd-5cb0-4c01-971d-7e0e6ba4db9b"
+location        = "brazilsouth"
+resource_group_name = "rg-fiapgames-prod"
+aks_name        = "aks-fiapgames-prod"
+node_vm_size    = "Standard_B2s"
+acr_resource_id = "/subscriptions/64f434dd-5cb0-4c01-971d-7e0e6ba4db9b/resourceGroups/rg-fiapgames-prod/providers/Microsoft.ContainerRegistry/registries/acrfiapgamesprod64f434dd"
+acr_login_server = "acrfiapgamesprod64f434dd.azurecr.io"
