@@ -55,7 +55,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"user@user.com\",\n  \"passwordHash\": \"User@123\"\n}"
+              "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"passwordHash\": \"{{userPassword}}\"\n}"
             },
             "url": "{{baseUrl}}/users/api/Auth/login"
           },
@@ -87,7 +87,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"admin@admin.com\",\n  \"passwordHash\": \"Admin@123\"\n}"
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"passwordHash\": \"{{adminPassword}}\"\n}"
             },
             "url": "{{baseUrl}}/users/api/Auth/login"
           },
@@ -133,7 +133,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"nome\": \"Usuario Postman\",\n  \"email\": \"postman@example.com\",\n  \"passwordHash\": \"Postman@123\",\n  \"tipoUsuario\": 1\n}"
+              "raw": "{\n  \"nome\": \"Usuario Postman\",\n  \"email\": \"postman@example.com\",\n  \"passwordHash\": \"Postman@123\"\n}"
             },
             "url": "{{baseUrl}}/users/api/Login"
           }
@@ -194,7 +194,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"user@user.com\",\n  \"novaSenha\": \"NovaSenha@123\"\n}"
+              "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"novaSenha\": \"NovaSenha@123\"\n}"
             },
             "url": "{{baseUrl}}/users/api/Auth/trocar-senha"
           }

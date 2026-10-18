@@ -1,4 +1,4 @@
-{
+﻿{
     "openapi": "3.0.1",
     "info": {
         "title": "FIAP Games Users API",
@@ -352,10 +352,6 @@
                     "passwordHash": {
                         "type": "string",
                         "nullable": true
-                    },
-                    "tipoUsuario": {
-                        "type": "integer",
-                        "format": "int32"
                     }
                 },
                 "additionalProperties": false

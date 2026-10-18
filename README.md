@@ -191,19 +191,18 @@ Useful health endpoints behind each service are `/health/live` and `/health/read
 
 ## Cost control
 
-The environment can be suspended without deleting resources:
-
-```powershell
-.\scripts\suspend-environment.ps1
-```
-
-Resume it before demos or integration tests:
+The AKS demo lifecycle is managed by the scripts in `scripts/`:
 
 ```powershell
 .\scripts\resume-environment.ps1
+.\scripts\suspend-environment.ps1
 ```
 
-The scripts scale/deactivate Container Apps, stop/start AKS and the Function, and change SQL databases between provisioned Basic and serverless auto-pause modes. This is the data-preserving mode, not a zero-cost shutdown: APIM Developer, Cosmos DB, Redis, ACR, Key Vault, Storage, Log Analytics, disks and IPs may continue charging. A destructive delete mode is intentionally not provided. Do not run `terraform apply` while intentionally suspended, because Terraform may restore the declared running state.
+Before resuming, install Azure CLI, Terraform, kubectl and the .NET 10 SDK; sign in with `az login`; restore `aks/terraform.tfstate` if needed; and recreate the Elastic Cloud project with its endpoint and API key in Key Vault. Run `scripts/resume-environment.ps1` from any directory. It tests both local services, builds and pushes their current local source to ACR with a unique tag, safely plans/applies the AKS and Redis Terraform stack, starts AKS, imports RabbitMQ credentials from Key Vault into a Kubernetes Secret, deploys RabbitMQ, runs both database migration Jobs, applies the API Services and Deployments, waits for API readiness and starts the Notification Function. GitHub CLI and workflow dispatch are not required; uncommitted local edits are included in the build.
+
+The suspend script scales the Auth and Catalog deployments to zero, deletes their public LoadBalancer Services, stops AKS and the Function, deactivates legacy Container Apps, deletes the disposable Redis cache, and sets SQL auto-pause to 15 minutes. It preserves AKS/Terraform state and RabbitMQ data. SQL compute pauses after inactivity; database storage remains billable. The next resume recreates Redis and deploys the current local service code.
+
+This is a cost-reduction workflow, not a zero-cost shutdown. APIM Developer, ACR, Key Vault, Storage, Log Analytics, SQL storage, AKS disks/outbound IP and Elastic Cloud may still incur charges. Elastic Cloud is managed outside this Terraform root; delete or pause that project in its provider when it is not needed. The API Management instance also still targets the legacy Container Apps backend; use the AKS LoadBalancer addresses printed by the resume script for the AKS demo unless APIM is separately reconfigured.
 
 ## Repository hygiene
 

@@ -12,6 +12,8 @@ jwt-private.pem.pub
 .terraform/
 *.tfstate
 *.tfstate.*
+*.plan
+*.tfplan
 crash.log
 crash.*.log
 *.tfplan

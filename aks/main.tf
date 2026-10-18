@@ -36,9 +36,9 @@ variable "aks_name" {
 }
 
 variable "node_vm_size" {
-  description = "One-node demo SKU; confirm regional quota and cost before apply."
+  description = "Smallest VM family currently allowed by the target subscription in Brazil South."
   type        = string
-  default     = "Standard_B2s"
+  default     = "Standard_D2_v4"
 }
 
 variable "acr_resource_id" {
@@ -57,6 +57,11 @@ data "azurerm_resource_group" "main" {
 
 data "azurerm_user_assigned_identity" "workloads" {
   name                = "id-fiapgames-workloads-prod"
+  resource_group_name = var.resource_group_name
+}
+
+data "azurerm_key_vault" "main" {
+  name                = "kv-fiapgames-64f434dd"
   resource_group_name = var.resource_group_name
 }
 
@@ -85,6 +90,10 @@ resource "azurerm_kubernetes_cluster" "fcg" {
     node_count      = 1
     vm_size         = var.node_vm_size
     os_disk_size_gb = 64
+
+    upgrade_settings {
+      max_surge = "10%"
+    }
   }
 
   identity {
@@ -134,4 +143,30 @@ output "aks_oidc_issuer" {
 
 output "acr_login_server" {
   value = var.acr_login_server
+}
+
+resource "azurerm_redis_cache" "catalog" {
+  name                = "redis-fiapgames-64f434dd"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  capacity            = 0
+  family              = "C"
+  sku_name            = "Basic"
+
+  enable_non_ssl_port = false
+  minimum_tls_version = "1.2"
+
+  redis_configuration {
+    maxmemory_reserved = 2
+    maxmemory_delta    = 2
+    maxmemory_policy   = "allkeys-lru"
+  }
+
+  tags = local.tags
+}
+
+resource "azurerm_key_vault_secret" "redis_connection" {
+  name         = "Redis--ConnectionString"
+  key_vault_id = data.azurerm_key_vault.main.id
+  value        = "${azurerm_redis_cache.catalog.hostname}:${azurerm_redis_cache.catalog.ssl_port},password=${azurerm_redis_cache.catalog.primary_access_key},ssl=True,abortConnect=False"
 }
