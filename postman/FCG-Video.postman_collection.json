@@ -1,0 +1,235 @@
+﻿{
+    "variable":  [
+
+                 ],
+    "info":  {
+                 "description":  "Roteiro para a gravação. Rode a pasta 1 antes do live deploy e pare. Altere o tratamento de e-mail duplicado no Auth, faça push para main, acompanhe a GitHub Action até o rollout e só então rode a pasta 2. Depois rode Catalog: compare o cache e demonstre busca fuzzy. Auth e Catalog acessam AKS diretamente.",
+                 "name":  "FIAP Cloud Games - Roteiro do Video (Azure)",
+                 "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+                 "_postman_id":  "15955f09-aeaa-4b57-b1f0-2a4f434ddf21"
+             },
+    "item":  [
+                 {
+                     "description":  "1) Login; 2) reproduza o cadastro duplicado atual (500). Pare aqui para editar, pushar e aguardar a GitHub Action do Auth.",
+                     "name":  "1 - Antes do live deploy",
+                     "item":  [
+                                  {
+                                      "request":  {
+                                                      "body":  {
+                                                                   "raw":  "{\n  \"email\": \"{{userEmail}}\",\n  \"passwordHash\": \"{{userPassword}}\"\n}",
+                                                                   "mode":  "raw"
+                                                               },
+                                                      "method":  "POST",
+                                                      "url":  "{{authBaseUrl}}/api/Auth/login",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               }
+                                                  },
+                                      "name":  "1. Login - Usuario existente",
+                                      "description":  "Usa a conta de demonstração já existente e salva o JWT para as chamadas protegidas.",
+                                      "event":  [
+                                                    {
+                                                        "script":  {
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Login respondeu HTTP 200\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const body = pm.response.json();",
+                                                                                    "const token = body.token || body.Token || body.accessToken;",
+                                                                                    "pm.expect(token, \u0027JWT ausente\u0027).to.be.a(\u0027string\u0027).and.not.empty;",
+                                                                                    "pm.environment.set(\u0027userToken\u0027, token);"
+                                                                                ],
+                                                                       "type":  "text/javascript"
+                                                                   },
+                                                        "listen":  "test"
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "request":  {
+                                                      "body":  {
+                                                                   "raw":  "{\n  \"nome\": \"Usuario Postman\",\n  \"email\": \"{{duplicateEmail}}\",\n  \"passwordHash\": \"{{duplicatePassword}}\"\n}",
+                                                                   "mode":  "raw"
+                                                               },
+                                                      "method":  "POST",
+                                                      "url":  "{{authBaseUrl}}/api/Login",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               }
+                                                  },
+                                      "name":  "2. Cadastro duplicado - antes do deploy (espera 500)",
+                                      "description":  "Execute antes de alterar o código. O e-mail postman@example.com já existe no banco; a versão atual expõe a duplicidade como erro interno.",
+                                      "event":  [
+                                                    {
+                                                        "script":  {
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Antes da correção, reproduz o erro atual HTTP 500\u0027, () =\u003e pm.response.to.have.status(500));"
+                                                                                ],
+                                                                       "type":  "text/javascript"
+                                                                   },
+                                                        "listen":  "test"
+                                                    }
+                                                ]
+                                  }
+                              ]
+                 },
+                 {
+                     "description":  "Só execute depois que a GitHub Action em main concluir o rollout do Auth. Repete o mesmo cadastro e espera 409.",
+                     "name":  "2 - Depois do live deploy",
+                     "item":  [
+                                  {
+                                      "request":  {
+                                                      "body":  {
+                                                                   "raw":  "{\n  \"nome\": \"Usuario Postman\",\n  \"email\": \"{{duplicateEmail}}\",\n  \"passwordHash\": \"{{duplicatePassword}}\"\n}",
+                                                                   "mode":  "raw"
+                                                               },
+                                                      "method":  "POST",
+                                                      "url":  "{{authBaseUrl}}/api/Login",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               }
+                                                  },
+                                      "name":  "3. Repetir cadastro duplicado - depois do deploy (espera 409)",
+                                      "description":  "Execute somente depois de a GitHub Action concluir o deploy da correção no Auth. É o mesmo método, URL e body da chamada anterior.",
+                                      "event":  [
+                                                    {
+                                                        "script":  {
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Após o deploy, duplicidade é tratada como conflito HTTP 409\u0027, () =\u003e pm.response.to.have.status(409));"
+                                                                                ],
+                                                                       "type":  "text/javascript"
+                                                                   },
+                                                        "listen":  "test"
+                                                    }
+                                                ]
+                                  }
+                              ]
+                 },
+                 {
+                     "description":  "Use o token salvo no passo 1. Limpe catalog:jogos:todos no Redis antes de gravar a comparação; rode as duas listagens em sequência, depois a busca fuzzy.",
+                     "name":  "3 - Busca e cache do Catalog",
+                     "item":  [
+                                  {
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{catalogBaseUrl}}/api/Jogo",
+                                                      "auth":  {
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "type":  "string",
+                                                                                      "value":  "{{userToken}}"
+                                                                                  }
+                                                                              ],
+                                                                   "type":  "bearer"
+                                                               }
+                                                  },
+                                      "name":  "1. Catalog - Listar jogos (medição 1)",
+                                      "description":  "Para comparar miss/hit, remova antes a chave Redis catalog:jogos:todos. Esta chamada popula o cache.",
+                                      "event":  [
+                                                    {
+                                                        "script":  {
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Catalog respondeu HTTP 200\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "pm.environment.set(\u0027cacheFirstMs\u0027, String(pm.response.responseTime));",
+                                                                                    "console.log(\u0027Leitura 1 / ms:\u0027, pm.response.responseTime);"
+                                                                                ],
+                                                                       "type":  "text/javascript"
+                                                                   },
+                                                        "listen":  "test"
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{catalogBaseUrl}}/api/Jogo",
+                                                      "auth":  {
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "type":  "string",
+                                                                                      "value":  "{{userToken}}"
+                                                                                  }
+                                                                              ],
+                                                                   "type":  "bearer"
+                                                               }
+                                                  },
+                                      "name":  "2. Catalog - Repetir listagem (medição 2 / cache)",
+                                      "description":  "Execute em seguida, sem alterar os dados; compare os tempos no Postman Console e na aba Timing.",
+                                      "event":  [
+                                                    {
+                                                        "script":  {
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Catalog respondeu HTTP 200\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "pm.environment.set(\u0027cacheSecondMs\u0027, String(pm.response.responseTime));",
+                                                                                    "const first = pm.environment.get(\u0027cacheFirstMs\u0027);",
+                                                                                    "console.log(\u0027Leitura 1 / ms:\u0027, first, \u0027| Leitura 2 / ms:\u0027, pm.response.responseTime);"
+                                                                                ],
+                                                                       "type":  "text/javascript"
+                                                                   },
+                                                        "listen":  "test"
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{catalogBaseUrl}}/search?q={{searchTypo}}",
+                                                      "auth":  {
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "type":  "string",
+                                                                                      "value":  "{{userToken}}"
+                                                                                  }
+                                                                              ],
+                                                                   "type":  "bearer"
+                                                               }
+                                                  },
+                                      "name":  "3. Catalog - Busca fuzzy (termo com erro)",
+                                      "description":  "Busca fuzzy por Minecraft usando o termo digitado incorretamente Minecraf. Espera encontrar Minecraft no índice Elasticsearch.",
+                                      "event":  [
+                                                    {
+                                                        "script":  {
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Busca fuzzy respondeu HTTP 200\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const jogos = pm.response.json();",
+                                                                                    "pm.expect(jogos.some(j =\u003e (j.nome || j.Nome) === \u0027Minecraft\u0027), \u0027Minecraft esperado no resultado fuzzy\u0027).to.be.true;"
+                                                                                ],
+                                                                       "type":  "text/javascript"
+                                                                   },
+                                                        "listen":  "test"
+                                                    }
+                                                ]
+                                  }
+                              ],
+                     "auth":  {
+                                  "bearer":  [
+                                                 {
+                                                     "key":  "token",
+                                                     "type":  "string",
+                                                     "value":  "{{userToken}}"
+                                                 }
+                                             ],
+                                  "type":  "bearer"
+                              }
+                 }
+             ]
+}

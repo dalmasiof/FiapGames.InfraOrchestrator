@@ -2,12 +2,14 @@
 param(
     [string]$SubscriptionId = "64f434dd-5cb0-4c01-971d-7e0e6ba4db9b",
     [string]$ResourceGroup = "rg-fiapgames-prod",
-    [int]$TimeoutMinutes = 45
+    [int]$TimeoutMinutes = 45,
+    [string]$ImageTag = (Get-Date -Format "yyyyMMddHHmmss")
 )
 
 $ErrorActionPreference = "Stop"
 $aksCluster = "aks-fiapgames-prod"
 $keyVault = "kv-fiapgames-64f434dd"
+$workloadIdentity = "id-fiapgames-workloads-prod"
 $sqlServer = "sql-fiapgames-prod-64f434dd"
 $acrName = "acrfiapgamesprod64f434dd"
 $databases = @("fiapgames_auth", "fiapgames_catalog", "fiapgames_payment", "fiapgames_notification")
@@ -15,7 +17,6 @@ $terraformDirectory = Join-Path (Split-Path $PSScriptRoot -Parent) "aks"
 $workspaceRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $authPath = Join-Path $workspaceRoot "FiapGame.AuthService"
 $catalogPath = Join-Path $workspaceRoot "FiapGames.Catalog"
-$imageTag = Get-Date -Format "yyyyMMddHHmmss"
 
 function Require-Command([string]$Name) {
     if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) { throw "Required command '$Name' was not found. Install it and retry." }
@@ -33,18 +34,28 @@ function Invoke-Kubectl([string[]]$Arguments) {
 }
 function Apply-ManifestWithImage([string]$Path, [string]$ImageName) {
     $manifest = Get-Content -LiteralPath $Path -Raw
-    $manifest = $manifest.Replace("${ImageName}:bootstrap", "${ImageName}:$imageTag")
+    $manifest = $manifest.Replace("${ImageName}:bootstrap", "${ImageName}:$ImageTag")
     $manifest | & kubectl apply -f - | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "Could not apply manifest $Path." }
 }
 function Wait-ForAksRunning {
     $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
     do {
-        $state = Invoke-AzText @("aks", "show", "--name", $aksCluster, "--resource-group", $ResourceGroup, "--query", "powerState.code", "--output", "tsv")
-        if ($state -eq "Running") { return }
+        $stateJson = Invoke-AzText @("aks", "show", "--name", $aksCluster, "--resource-group", $ResourceGroup, "--query", "{powerState:powerState.code,provisioningState:provisioningState}", "--output", "json")
+        $state = $stateJson | ConvertFrom-Json
+        if ($state.powerState -eq "Running" -and $state.provisioningState -eq "Succeeded") { return }
         Start-Sleep -Seconds 15
     } while ((Get-Date) -lt $deadline)
-    throw "AKS did not reach Running within $TimeoutMinutes minutes. Last state: $state"
+    throw "AKS did not reach Running/Succeeded within $TimeoutMinutes minutes. Last state: $($state | ConvertTo-Json -Compress)"
+}
+function Wait-ForKubernetesApi {
+    $deadline = (Get-Date).AddMinutes(10)
+    do {
+        $null = & kubectl get nodes --no-headers 2>$null
+        if ($LASTEXITCODE -eq 0) { return }
+        Start-Sleep -Seconds 15
+    } while ((Get-Date) -lt $deadline)
+    throw "AKS control-plane endpoint did not become reachable through kubectl within 10 minutes."
 }
 function Wait-ForApiHealth([string]$ServiceName, [int]$Port) {
     $deadline = (Get-Date).AddMinutes(10)
@@ -76,6 +87,82 @@ function Set-KubernetesRabbitSecret {
     $secretYaml | & kubectl apply -f - | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "Could not create Kubernetes secret rabbitmq-auth from Key Vault." }
     $username = $null; $password = $null; $secretYaml = $null
+}
+function Build-AndPushImage([string]$RepositoryPath, [string]$ImageName) {
+    $existingTag = & az acr repository show-tags --name $acrName --repository $ImageName --query "[?@=='$ImageTag'] | [0]" --output tsv 2>$null
+    if ($LASTEXITCODE -eq 0 -and ($existingTag -join "").Trim() -eq $ImageTag) {
+        Write-Host "  $ImageName`:$ImageTag already exists in ACR; reusing it."
+        return
+    }
+    Push-Location $RepositoryPath
+    try {
+        Invoke-Az @("acr", "build", "--registry", $acrName, "--image", "${ImageName}:$ImageTag", "--file", "Dockerfile", ".") | Out-Null
+    }
+    finally { Pop-Location }
+}
+function Enable-ContainerApp([string]$Name) {
+    Invoke-Az @("containerapp", "update", "--name", $Name, "--resource-group", $ResourceGroup, "--min-replicas", "1", "--max-replicas", "1", "--output", "none") | Out-Null
+    $revision = Invoke-AzText @("containerapp", "show", "--name", $Name, "--resource-group", $ResourceGroup, "--query", "properties.latestRevisionName", "--output", "tsv")
+    if ([string]::IsNullOrWhiteSpace($revision)) { throw "Container App $Name has no latest revision." }
+    $active = Invoke-AzText @("containerapp", "revision", "show", "--name", $Name, "--resource-group", $ResourceGroup, "--revision", $revision, "--query", "properties.active", "--output", "tsv")
+    if ($active -ne "true") {
+        Invoke-Az @("containerapp", "revision", "activate", "--name", $Name, "--resource-group", $ResourceGroup, "--revision", $revision, "--output", "none") | Out-Null
+    }
+
+    $deadline = (Get-Date).AddMinutes(10)
+    do {
+        $stateJson = Invoke-AzText @("containerapp", "revision", "show", "--name", $Name, "--resource-group", $ResourceGroup, "--revision", $revision, "--query", "{active:properties.active,replicas:properties.replicas,health:properties.healthState,provisioningState:properties.provisioningState}", "--output", "json")
+        $state = $stateJson | ConvertFrom-Json
+        $containerReady = Invoke-AzText @("containerapp", "replica", "list", "--name", $Name, "--resource-group", $ResourceGroup, "--revision", $revision, "--query", "[].properties.containers[].ready", "--output", "tsv")
+        $hasReadyReplica = @($containerReady -split "`n" | Where-Object { $_.Trim() -eq "true" }).Count -gt 0
+        $healthAcceptable = [string]::IsNullOrWhiteSpace($state.health) -or $state.health -eq "Healthy"
+        if ($state.active -and $state.replicas -ge 1 -and $hasReadyReplica -and $healthAcceptable -and $state.provisioningState -eq "Provisioned") { return }
+        Start-Sleep -Seconds 10
+    } while ((Get-Date) -lt $deadline)
+    throw "Container App $Name did not become healthy with a running replica. Last state: $($state | ConvertTo-Json -Compress)"
+}
+function Configure-PaymentContainerApp {
+    $identityId = Invoke-AzText @("identity", "show", "--name", $workloadIdentity, "--resource-group", $ResourceGroup, "--query", "id", "--output", "tsv")
+    $authFqdn = Invoke-AzText @("containerapp", "show", "--name", "ca-auth-api", "--resource-group", $ResourceGroup, "--query", "properties.configuration.ingress.fqdn", "--output", "tsv")
+    $rabbitMqFqdn = Invoke-AzText @("containerapp", "show", "--name", "ca-rabbitmq-prod", "--resource-group", $ResourceGroup, "--query", "properties.configuration.ingress.fqdn", "--output", "tsv")
+    if ([string]::IsNullOrWhiteSpace($identityId) -or [string]::IsNullOrWhiteSpace($authFqdn) -or [string]::IsNullOrWhiteSpace($rabbitMqFqdn)) {
+        throw "Could not resolve the workload identity or Payment dependencies in Container Apps."
+    }
+
+    $vaultUri = "https://$keyVault.vault.azure.net/secrets"
+    $secretReferences = @(
+        "payment-connection=keyvaultref:$vaultUri/ConnectionStrings--PaymentConnection,identityref:$identityId",
+        "rabbitmq-user=keyvaultref:$vaultUri/RabbitMq--UserName,identityref:$identityId",
+        "rabbitmq-pass=keyvaultref:$vaultUri/RabbitMq--Password,identityref:$identityId"
+    )
+    $secretArgs = @("containerapp", "secret", "set", "--name", "ca-payment-api", "--resource-group", $ResourceGroup, "--secrets") + $secretReferences + @("--output", "none")
+    Invoke-Az $secretArgs | Out-Null
+
+    Invoke-Az @(
+        "containerapp", "update", "--name", "ca-payment-api", "--resource-group", $ResourceGroup,
+        "--set-env-vars",
+        "ConnectionStrings__PaymentConnection=secretref:payment-connection",
+        "RabbitMq__HostName=$rabbitMqFqdn",
+        "RabbitMq__Port=5672",
+        "RabbitMq__UserName=secretref:rabbitmq-user",
+        "RabbitMq__Password=secretref:rabbitmq-pass",
+        "Jwt__Authority=https://$authFqdn",
+        "ASPNETCORE_ENVIRONMENT=Production",
+        "--min-replicas", "1", "--max-replicas", "1", "--output", "none"
+    ) | Out-Null
+}
+function Set-ApimIngressRestrictions {
+    $apimName = "apim-fiapgames-prod-$((($SubscriptionId -replace '-', '').Substring(0, 8)))-v2"
+    $ipText = Invoke-AzText @("apim", "show", "--name", $apimName, "--resource-group", $ResourceGroup, "--query", "outboundPublicIpAddresses", "--output", "tsv")
+    $apimIps = @($ipText -split "," | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($apimIps.Count -eq 0) { throw "Could not determine the APIM outbound IP address for Container Apps ingress restrictions." }
+
+    foreach ($appName in @("ca-auth-api", "ca-catalog-api", "ca-payment-api")) {
+        for ($index = 0; $index -lt $apimIps.Count; $index++) {
+            $ruleName = if ($index -eq 0) { "Allow-APIM" } else { "Allow-APIM-$($index + 1)" }
+            Invoke-Az @("containerapp", "ingress", "access-restriction", "set", "--name", $appName, "--resource-group", $ResourceGroup, "--rule-name", $ruleName, "--ip-address", "$($apimIps[$index])/32", "--description", "Current APIM outbound IP", "--action", "Allow", "--output", "none") | Out-Null
+        }
+    }
 }
 
 Require-Command "az"
@@ -112,6 +199,17 @@ if ([string]::IsNullOrWhiteSpace($elasticEndpoint) -or [string]::IsNullOrWhiteSp
     -not [Uri]::TryCreate($elasticEndpoint, [UriKind]::Absolute, [ref]$parsedElasticEndpoint) -or $parsedElasticEndpoint.Scheme -ne "https") {
     throw "Elastic HTTPS endpoint/API key is missing or invalid. Recreate the Elastic project and update Key Vault first."
 }
+$elasticApiKey = Invoke-AzText @("keyvault", "secret", "show", "--vault-name", $keyVault, "--name", "Elasticsearch--ApiKey", "--query", "value", "--output", "tsv")
+$elasticIndex = Invoke-AzText @("keyvault", "secret", "show", "--vault-name", $keyVault, "--name", "Elasticsearch--Index", "--query", "value", "--output", "tsv")
+try {
+    $elasticProbeBody = '{"size":0,"query":{"match_all":{}}}'
+    $elasticProbe = Invoke-RestMethod -Uri ($elasticEndpoint.TrimEnd('/') + "/$elasticIndex/_search") -Headers @{ Authorization = "ApiKey $elasticApiKey" } -Method Post -ContentType "application/json" -Body $elasticProbeBody -TimeoutSec 15
+    Write-Host ("Elasticsearch is reachable; index '{0}' has {1} documents." -f $elasticIndex, $elasticProbe.hits.total.value)
+}
+catch {
+    throw "Elasticsearch search endpoint is unavailable or unauthorized. No Azure changes have been applied. Recreate/repair the Elastic project and update its Key Vault endpoint, API key, and index. Details: $($_.Exception.Message)"
+}
+finally { $elasticApiKey = $null; $elasticProbeBody = $null }
 if (-not (Test-Path (Join-Path $terraformDirectory "terraform.tfstate"))) { throw "AKS Terraform state is missing at $terraformDirectory." }
 
 Write-Host "Planning AKS and Redis. The script will refuse a Terraform plan that deletes or replaces resources."
@@ -139,14 +237,15 @@ foreach ($database in $databases) {
     Invoke-Az @("sql", "db", "update", "--name", $database, "--server", $sqlServer, "--resource-group", $ResourceGroup, "--edition", "GeneralPurpose", "--family", "Gen5", "--capacity", "1", "--compute-model", "Serverless", "--auto-pause-delay", "60", "--min-capacity", "0.5", "--output", "none") | Out-Null
 }
 
-Write-Host "Building and publishing local Auth/Catalog source in Azure Container Registry (tag $imageTag)..."
-Invoke-Az @("acr", "build", "--registry", $acrName, "--image", "auth-api:$imageTag", "--file", "Dockerfile", $authPath) | Out-Null
-Invoke-Az @("acr", "build", "--registry", $acrName, "--image", "catalog-api:$imageTag", "--file", "Dockerfile", $catalogPath) | Out-Null
+Write-Host "Building and publishing local Auth/Catalog source in Azure Container Registry (tag $ImageTag)..."
+Build-AndPushImage $authPath "auth-api"
+Build-AndPushImage $catalogPath "catalog-api"
 
 $aksState = Invoke-AzText @("aks", "show", "--name", $aksCluster, "--resource-group", $ResourceGroup, "--query", "powerState.code", "--output", "tsv")
 if ($aksState -eq "Stopped") { Invoke-Az @("aks", "start", "--name", $aksCluster, "--resource-group", $ResourceGroup, "--output", "none") | Out-Null }
 Wait-ForAksRunning
 Invoke-Az @("aks", "get-credentials", "--resource-group", $ResourceGroup, "--name", $aksCluster, "--overwrite-existing") | Out-Null
+Wait-ForKubernetesApi
 Invoke-Kubectl @("wait", "--for=condition=Ready", "nodes", "--all", "--timeout=10m") | Out-Null
 
 Set-KubernetesRabbitSecret
@@ -175,16 +274,24 @@ Invoke-Kubectl @("rollout", "status", "deployment/catalog-api", "--timeout=10m")
 Invoke-Az @("functionapp", "start", "--name", "func-fcg-notify-64f434dd", "--resource-group", $ResourceGroup, "--output", "none") | Out-Null
 $functionDeadline = (Get-Date).AddMinutes(5)
 do {
-    $functionState = Invoke-AzText @("functionapp", "show", "--name", "func-fcg-notify-64f434dd", "--resource-group", $ResourceGroup, "--query", "state", "--output", "tsv")
+    $functionState = Invoke-AzText @("functionapp", "show", "--name", "func-fcg-notify-64f434dd", "--resource-group", $ResourceGroup, "--query", "properties.state", "--output", "tsv")
     if ($functionState -eq "Running") { break }
     Start-Sleep -Seconds 10
 } while ((Get-Date) -lt $functionDeadline)
 if ($functionState -ne "Running") { throw "Notification Function did not reach Running state. Last state: $functionState" }
 
+Write-Host "Starting the legacy Container Apps dependencies required by the Payment API..."
+Set-ApimIngressRestrictions
+Enable-ContainerApp "ca-rabbitmq-prod"
+Enable-ContainerApp "ca-auth-api"
+Configure-PaymentContainerApp
+Enable-ContainerApp "ca-payment-api"
+
 $authHealthUri = Wait-ForApiHealth "auth-api" 8081
 $catalogHealthUri = Wait-ForApiHealth "catalog-api" 8082
-Write-Host "Environment is ready (image tag $imageTag):"
+Write-Host "Environment is ready (image tag $ImageTag):"
 Write-Host "  Auth:    $authHealthUri"
 Write-Host "  Catalog: $catalogHealthUri"
 Write-Host "  Auth/Catalog migrations completed; RabbitMQ StatefulSet and API rollouts are healthy; Notification Function is running."
+Write-Host "  Payment API, its APIM authentication authority, and its RabbitMQ dependency are running in Container Apps."
 Write-Warning "APIM Developer, ACR, Key Vault, Storage, Log Analytics, SQL storage, AKS disks/IP and Elastic may still incur charges."

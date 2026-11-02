@@ -157,8 +157,8 @@ resource "azurerm_redis_cache" "catalog" {
   minimum_tls_version = "1.2"
 
   redis_configuration {
-    maxmemory_reserved = 2
-    maxmemory_delta    = 2
+    maxmemory_reserved = 30
+    maxmemory_delta    = 30
     maxmemory_policy   = "allkeys-lru"
   }
 

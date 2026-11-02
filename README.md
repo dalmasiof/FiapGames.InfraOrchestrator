@@ -46,7 +46,7 @@ scripts/resume-environment.ps1  Environment startup
 docker-compose.yml              Local Auth/Catalog/Payment environment
 ```
 
-The serverless Notification infrastructure intentionally lives in the `FiapGames.Notification/infra` directory of its own repository. Azure Container Apps remains the current production runtime. Terraform and the `k8s/` manifests now define a low-cost AKS demo target for Auth and Catalog; do not apply it until the monthly cost and Elastic Cloud service are approved. The old Kubernetes manifests outside the `auth-api-*` and `catalog-api-*` sets are legacy.
+The serverless Notification infrastructure intentionally lives in the `FiapGames.Notification/infra` directory of its own repository. Azure Container Apps remains the legacy production runtime; AKS hosts Auth and Catalog for the Phase 4 demo. The AKS lifecycle scripts manage the one-node cluster and disposable Redis cache. The old Kubernetes manifests outside the `auth-api-*` and `catalog-api-*` sets are legacy. Catalog search depends on a separate Elastic Cloud project; the resume script checks its search endpoint before starting Azure compute.
 
 ## Prerequisites
 
