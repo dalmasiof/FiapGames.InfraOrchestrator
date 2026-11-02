@@ -146,7 +146,7 @@ Each application repository owns its workflow:
 
 The legacy Auth/Catalog Container Apps workflows are manual-only for rollback. Notification applies its own Terraform, migrates its database and performs a Function ZIP deployment.
 
-The Fase 4 workflows are `deploy-aks.yml` in Auth and Catalog. They run tests, push an immutable SHA tag to ACR, run a Kubernetes migration Job, and wait for a rolling Deployment update. Auth deploys from `main`; Catalog currently deploys from `master` because that is the repository's existing default branch. The ACA workflows are manual-only for rollback. Configure the Auth repository secrets `RABBITMQ_USERNAME` and `RABBITMQ_PASSWORD`; the Auth workflow creates the AKS Secret `rabbitmq-auth` at deployment time.
+The Fase 4 workflows are `deploy-aks.yml` in Auth and Catalog. They run tests, push an immutable SHA tag to ACR, run a Kubernetes migration Job, and wait for a rolling Deployment update. Auth deploys from `main`; Catalog currently deploys from `master` because that is the repository's existing default branch. The ACA workflows are manual-only for rollback. RabbitMQ credentials live in Key Vault and `scripts/resume-environment.ps1` syncs them to the AKS Secret `rabbitmq-auth`. The Auth workflow checks that this Secret exists before building and publishing its image.
 
 Configure the repository secrets and variables listed in [CONFIG_SECRET_MATRIX.md](CONFIG_SECRET_MATRIX.md) before the first run. The deployment service principal should have only the roles and resource-group scope required by the workflows.
 

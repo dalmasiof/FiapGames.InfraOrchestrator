@@ -29,15 +29,11 @@ The public RSA key is published by Auth as JWKS. Catalog, Payment and APIM valid
 | `AZURE_CREDENTIALS` | Repository secret | Azure login JSON for the deployment service principal |
 | `ACR_USERNAME` | Repository secret | ACR push and migration-job pull |
 | `ACR_PASSWORD` | Repository secret | ACR push and migration-job pull |
-| `RABBITMQ_USERNAME` | Auth repository secret | AKS RabbitMQ Secret creation at deploy time |
-| `RABBITMQ_PASSWORD` | Auth repository secret | AKS RabbitMQ Secret creation at deploy time |
-| `RABBITMQ_USERNAME` | Auth repository secret | Creates the AKS RabbitMQ Kubernetes Secret at deploy time |
-| `RABBITMQ_PASSWORD` | Auth repository secret | Creates the AKS RabbitMQ Kubernetes Secret at deploy time |
 | `KEY_VAULT_URI` | Repository variable | Key Vault URI |
 | `AZURE_MANAGED_IDENTITY_RESOURCE_ID` | Repository variable | Workload identity resource ID |
 | `AZURE_MANAGED_IDENTITY_CLIENT_ID` | Repository variable | Workload identity client ID |
 
-Use the exact names expected by each workflow. Never print secret values in workflow logs.
+Use the exact names expected by each workflow. Never print secret values in workflow logs. RabbitMQ credentials are stored in Key Vault and synchronized to the AKS `rabbitmq-auth` Secret by `scripts/resume-environment.ps1`; they are not GitHub Actions secrets.
 
 ## Local development
 
